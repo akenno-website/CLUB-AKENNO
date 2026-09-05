@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>*** CLUB AKENNO - MEMBER ZONE ***</title>
+    <title>*** WELCOME TO CLUB YOU - OFFICIAL SITE ***</title>
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyC5RIt66tqj_E7Xj_1UarhaIcGWezIVVVY",
@@ -22,139 +22,136 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        let currentUsername = "";
-
-        // Protect page & look up username from 'usernames' collection via UID
-        onAuthStateChanged(auth, async (user) => {
-            if (!user) {
-                alert("ACCESS DENIED: Please log in first!");
-                window.location.href = "index.html";
-                return;
-            }
-
-            try {
-                // Find document in 'usernames' where uid matches auth.currentUser.uid
-                const q = query(collection(db, "usernames"), where("uid", "==", user.uid));
-                const querySnapshot = await getDocs(q);
-
-                if (!querySnapshot.empty) {
-                    // Document ID is the actual username (e.g. "admin")
-                    currentUsername = querySnapshot.docs[0].id;
-                } else {
-                    currentUsername = user.displayName || "Member";
-                }
-
-                document.getElementById("userDisplay").innerText = currentUsername;
-                document.getElementById("memberStatus").innerText = "STATUS: ACTIVE MEMBER";
-                
-                listenToLeaderboardAndRoster();
-            } catch (err) {
-                console.error("Error fetching username:", err);
-                document.getElementById("userDisplay").innerText = user.displayName || "Member";
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                console.log("Logged in as:", user.displayName || user.email);
             }
         });
 
-        // Logout Handler
-        window.handleLogout = async function() {
+        // Login Handler (Supports Username OR Email)
+        window.handleLogin = async function(event) {
+            event.preventDefault();
+            const userInput = document.forms["loginForm"]["usernameOrEmail"].value.trim();
+            const pass = document.forms["loginForm"]["password"].value.trim();
+
+            let targetEmail = userInput;
+
             try {
-                await signOut(auth);
-                alert("LOGGED OUT SUCCESSFULLY.");
-                window.location.href = "index.html";
+                if (!userInput.includes("@")) {
+                    const usernameRef = doc(db, "usernames", userInput.toLowerCase());
+                    const usernameSnap = await getDoc(usernameRef);
+
+                    if (!usernameSnap.exists()) {
+                        throw new Error("Username not found.");
+                    }
+                    targetEmail = usernameSnap.data().email;
+                }
+
+                const userCredential = await signInWithEmailAndPassword(auth, targetEmail, pass);
+                const displayName = userCredential.user.displayName || userCredential.user.email;
+                alert("ACCESS GRANTED: Welcome back, " + displayName + "!");
+                window.location.href = "home_logged_in.html";
             } catch (err) {
-                alert("LOGOUT ERROR: " + err.message);
+                alert("ACCESS DENIED: " + err.message);
             }
         };
 
-        // Realtime Listener for Leaderboard & Roster using 'usernames' collection
-        function listenToLeaderboardAndRoster() {
-            const usernamesRef = collection(db, "usernames");
-            onSnapshot(usernamesRef, (snapshot) => {
-                let members = [];
-                snapshot.forEach((docSnap) => {
-                    members.push({ 
-                        username: docSnap.id, // Document ID is the username
-                        ...docSnap.data() 
-                    });
-                });
+        // Signup Handler
+        // Signup Handler
+window.handleRegister = async function(event) {
+    event.preventDefault();
+    const username = document.forms["registerForm"]["regUsername"].value.trim();
+    const email = document.forms["registerForm"]["regEmail"].value.trim();
+    const pass = document.forms["registerForm"]["regPassword"].value.trim();
 
-                members.sort((a, b) => (b.clout || 0) - (a.clout || 0));
+    const usernameKey = username.toLowerCase();
+    const usernameRef = doc(db, "usernames", usernameKey);
 
-                // Render Leaderboard
-                let lbHtml = "";
-                members.forEach((m, index) => {
-                    const rank = "#" + (index + 1);
-                    const name = m.username;
-                    const userText = m.status === "BANNED" ? "<s>" + name + "</s>" : name;
-                    const points = m.clout || 0;
-                    const ptColor = points < 0 ? "#FF0000" : "#FFFF00";
+    try {
+        // 1. Create the Auth account first (authenticates the user)
+        const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
 
-                    lbHtml += "<tr>";
-                    lbHtml += "<td align='center'><b>" + rank + "</b></td>";
-                    lbHtml += "<td><font color='#00FF00'>" + userText + "</font></td>";
-                    lbHtml += "<td align='center'><font color='#00FFFF'>" + (m.role || "Member") + "</font></td>";
-                    lbHtml += "<td align='right'><font color='" + ptColor + "'>" + points.toLocaleString() + "</font></td>";
-                    lbHtml += "</tr>";
-                });
-                
-                const lbTable = document.getElementById("leaderboardBody");
-                if (lbTable) lbTable.innerHTML = lbHtml;
-
-                // Render Roster
-                let rosHtml = "";
-                members.forEach((mem) => {
-                    const name = mem.username;
-                    const status = mem.status || "ACTIVE";
-                    const statusColor = status === "ACTIVE" ? "#00FF00" : (status === "BANNED" ? "#FF0000" : "#FFFF00");
-
-                    rosHtml += "<tr>";
-                    rosHtml += "<td>" + name + "</td>";
-                    rosHtml += "<td><font color='" + statusColor + "'>" + status + "</font></td>";
-                    rosHtml += "<td>" + (mem.role || "Member") + "</td>";
-                    rosHtml += "</tr>";
-                });
-
-                const rosTable = document.getElementById("rosterBody");
-                if (rosTable) rosTable.innerHTML = rosHtml;
-            });
+        // 2. Check if username document exists in Firestore
+        const usernameSnap = await getDoc(usernameRef);
+        if (usernameSnap.exists()) {
+            throw new Error("That username is already taken!");
         }
+
+        // 3. Update auth display name & save mapping
+        await updateProfile(userCredential.user, { displayName: username });
+        await setDoc(usernameRef, {
+            email: email,
+            uid: userCredential.user.uid
+        });
+
+        alert("ACCOUNT CREATED: Welcome to the club, " + username + "!");
+        window.location.href = "home_logged_in.html";
+    } catch (err) {
+        alert("SIGNUP ERROR: " + err.message);
+    }
+};
     </script>
 </head>
 <body bgcolor="#000000" text="#00FF00" link="#FF00FF" vlink="#00FFFF" background="https://www.transparenttextures.com/patterns/stardust.png">
 
     <center>
         <font size="6" face="Comic Sans MS, Arial" color="#FFFF00">
-            <b>*** WELCOME TO THE SECRET MEMBER HEADQUARTERS ***</b>
+            <b>WELCOME TO THE OFFICIAL CLUB Akenno HOMEPAGE</b>
         </font>
         <br><br>
         <marquee scrollamount="8" width="80%">
-            <font color="#00FF00"><b>*** ACCESS GRANTED *** WELCOME BACK, <span id="userDisplay">...</span>! ***</b></font>
+            <font color="#FF0000"><b>*** LOGIN OR REGISTER BELOW *** AUTHORIZED PERSONNEL ONLY ***</b></font>
         </marquee>
     </center>
 
-    <hr size="5" color="#00FF00">
+    <hr size="5" color="#FF00FF">
 
     <table border="5" cellpadding="10" cellspacing="5" width="90%" align="center" bgcolor="#000033">
         <tr>
             <td width="30%" valign="top" bgcolor="#111111">
+                
                 <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
                     <tr>
-                        <td align="center" bgcolor="#008000">
-                            <font color="#FFFFFF" face="Arial" size="2"><b>[ USER CONTROL PANEL ]</b></font>
+                        <td align="center" bgcolor="#000080">
+                            <font color="#FFFFFF" face="Arial" size="2"><b>[ MEMBER LOGIN ]</b></font>
                         </td>
                     </tr>
                     <tr>
                         <td>
-                            <font face="Courier New" size="2" color="#00FF00">
-                                <b>USER STATUS:</b><br>
-                                <span id="memberStatus">AUTHENTICATING...</span><br><br>
-                                
-                                <b>CLEARANCE LEVEL:</b><br>
-                                <font color="#FFFF00">LEVEL 5 CLUBBER</font><br><br>
+                            <form name="loginForm" onsubmit="handleLogin(event)">
+                                <font face="Courier New" size="2" color="#00FF00">
+                                    USERNAME OR EMAIL:<br>
+                                    <input type="text" name="usernameOrEmail" size="15" required><br><br>
+                                    PASSWORD:<br>
+                                    <input type="password" name="password" size="15" required><br><br>
+                                    <input type="submit" value="LOGIN">
+                                </font>
+                            </form>
+                        </td>
+                    </tr>
+                </table>
 
-                                <button onclick="handleLogout()" style="background-color: #800000; color: #FFFFFF; font-family: Courier; font-weight: bold; cursor: pointer;">
-                                    [ LOGOUT ]
-                                </button>
-                            </font>
+                <br><hr color="#FF00FF"><br>
+
+                <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
+                    <tr>
+                        <td align="center" bgcolor="#800000">
+                            <font color="#FFFFFF" face="Arial" size="2"><b>[ NEW MEMBER SIGNUP ]</b></font>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <form name="registerForm" onsubmit="handleRegister(event)">
+                                <font face="Courier New" size="2" color="#00FF00">
+                                    USERNAME:<br>
+                                    <input type="text" name="regUsername" size="15" required><br><br>
+                                    EMAIL:<br>
+                                    <input type="email" name="regEmail" size="15" required><br><br>
+                                    PASSWORD:<br>
+                                    <input type="password" name="regPassword" size="15" required><br><br>
+                                    <input type="submit" value="REGISTER">
+                                </font>
+                            </form>
                         </td>
                     </tr>
                 </table>
@@ -164,51 +161,35 @@
                 <font face="Times New Roman" color="#FFFFFF">
                     <h3><b><u>NAVIGATION</u></b></h3>
                     <ul>
-                        <li><a href="home_logged_in.html">Member HQ</a></li>
-                        <li><a href="#leaderboard">Leaderboard</a></li>
-                        <li><a href="#roster">Club Roster</a></li>
+                        <li><a href="index.html">Home</a></li>
+                        <li><a href="about.html">About Me</a></li>
+                        <li><a href="gallery.html">Gallery</a></li>
+                        <img src="pic1.png" style="max-width: 75%; height: auto;">
+                        <img src="pic2.jpg" style="max-width: 75%; height: auto;">
                     </ul>
+                    <br>
+                    <center>
+                        <font size="2" color="yellow">BEST VIEWED IN<br>NETSCAPE NAVIGATOR 4.0</font>
+                    </center>
                 </font>
             </td>
 
             <td width="70%" valign="top">
-                <h2><font color="#00FFFF" face="Comic Sans MS">Member Dashboard</font></h2>
-                <p>Welcome to the encrypted inner circle.</p>
+                <h2><font color="#00FFFF" face="Comic Sans MS">Welcome</font></h2>
+                <p>
+                    Hi, welcome to my website. Sign up on the left to get instant access!
+                </p>
 
                 <hr color="#00FF00">
 
-                <a name="leaderboard"></a>
-                <h2><font color="yellow">CLUB LEADERBOARD</font></h2>
-                <table border="1" cellpadding="5" cellspacing="0" width="100%" bgcolor="#000000">
-                    <thead>
-                        <tr bgcolor="#000080">
-                            <th><font color="#FFFFFF">RANK</font></th>
-                            <th><font color="#FFFFFF">USERNAME</font></th>
-                            <th><font color="#FFFFFF">ROLE</font></th>
-                            <th><font color="#FFFFFF">CLOUT</font></th>
-                        </tr>
-                    </thead>
-                    <tbody id="leaderboardBody">
-                        <tr><td colspan="4" align="center">Loading member rankings...</td></tr>
-                    </tbody>
-                </table>
+                <br>
+                <h2><font color="yellow">PICTURE</font></h2>
+                
+                <center><img src="pic4.PNG" style="max-width: 75%; height: auto;"></center>
+                
+                <br>
 
-                <br><br>
-
-                <a name="roster"></a>
-                <h2><font color="yellow">ACTIVE ROSTER</font></h2>
-                <table border="1" cellpadding="5" cellspacing="0" width="100%" bgcolor="#000000">
-                    <thead>
-                        <tr bgcolor="#800000">
-                            <th><font color="#FFFFFF">USERNAME</font></th>
-                            <th><font color="#FFFFFF">STATUS</font></th>
-                            <th><font color="#FFFFFF">ROLE</font></th>
-                        </tr>
-                    </thead>
-                    <tbody id="rosterBody">
-                        <tr><td colspan="3" align="center">Loading roster...</td></tr>
-                    </tbody>
-                </table>
+                <center><img src="underconstruction.gif"></center>
             </td>
         </tr>
     </table>
@@ -218,6 +199,13 @@
     <center>
         <hr size="3" color="#FF00FF" width="50%">
         <font color="#FFFFFF" size="2">
+            VISITOR COUNTER:<br>
+            <table border="1" bgcolor="#000000" cellpadding="3">
+                <tr>
+                    <td><font color="#00FF00" face="Courier"><b>000001</b></font></td>
+                </tr>
+            </table>
+            <br>
             <i>Copyright &copy; 2026 Club Akenno. All Rights Reserved.</i>
         </font>
     </center>
