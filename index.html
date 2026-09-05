@@ -5,61 +5,45 @@
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
+        // REPLACE THESE WITH YOUR FIREBASE PROJECT CONFIG
         const firebaseConfig = {
-            apiKey: "AIzaSyC5RIt66tqj_E7Xj_1UarhaIcGWezIVVVY",
-            authDomain: "club-akenno.firebaseapp.com",
-            projectId: "club-akenno",
-            storageBucket: "club-akenno.firebasestorage.app",
-            messagingSenderId: "515392757059",
-            appId: "1:515392757059:web:5185d8c5173aa0a4b6e3f6",
-            measurementId: "G-9RWL6RHRJN"
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
         };
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
-        const db = getFirestore(app);
 
         // Keep track of auth state
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                console.log("Logged in as:", user.email);
+                console.log("Logged in as:", user.displayName || user.email);
             }
         });
 
-        // Login Handler (Supports Email OR Username)
+        // Login Handler
         window.handleLogin = async function(event) {
             event.preventDefault();
-            const inputIdentifier = document.forms["loginForm"]["identifier"].value.trim();
+            const email = document.forms["loginForm"]["email"].value.trim();
             const pass = document.forms["loginForm"]["password"].value.trim();
-            let targetEmail = inputIdentifier;
 
             try {
-                // If the user typed a username instead of an email, look up their email address in Firestore
-                if (!inputIdentifier.includes("@")) {
-                    const q = query(collection(db, "users"), where("username", "==", inputIdentifier));
-                    const querySnapshot = await getDocs(q);
-                    
-                    if (querySnapshot.empty) {
-                        throw new Error("Username not found!");
-                    }
-                    
-                    querySnapshot.forEach((docSnap) => {
-                        targetEmail = docSnap.data().email;
-                    });
-                }
-
-                const userCredential = await signInWithEmailAndPassword(auth, targetEmail, pass);
-                alert("ACCESS GRANTED: Welcome back!");
+                const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+                const displayName = userCredential.user.displayName || userCredential.user.email;
+                alert("ACCESS GRANTED: Welcome back, " + displayName + "!");
                 window.location.href = "home_logged_in.html";
             } catch (err) {
                 alert("ACCESS DENIED: " + err.message);
             }
         };
 
-        // Signup Handler (Username + Email + Password)
+        // Signup Handler
         window.handleRegister = async function(event) {
             event.preventDefault();
             const username = document.forms["registerForm"]["regUsername"].value.trim();
@@ -67,26 +51,11 @@
             const pass = document.forms["registerForm"]["regPassword"].value.trim();
 
             try {
-                // Check if username is already taken in Firestore
-                const q = query(collection(db, "users"), where("username", "==", username));
-                const existingUsers = await getDocs(q);
-                if (!existingUsers.empty) {
-                    throw new Error("That username is already taken! Pick another one.");
-                }
-
-                // Create auth user in Firebase Auth
                 const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-                const user = userCredential.user;
-
-                // Save custom username, email, and starting role in Firestore
-                await setDoc(doc(db, "users", user.uid), {
-                    username: username,
-                    email: email,
-                    role: "Member",
-                    status: "ACTIVE",
-                    clout: 0
+                // Save the username to the Firebase Auth profile
+                await updateProfile(userCredential.user, {
+                    displayName: username
                 });
-
                 alert("ACCOUNT CREATED: Welcome to the club, " + username + "!");
                 window.location.href = "home_logged_in.html";
             } catch (err) {
@@ -123,8 +92,8 @@
                         <td>
                             <form name="loginForm" onsubmit="handleLogin(event)">
                                 <font face="Courier New" size="2" color="#00FF00">
-                                    USERNAME OR EMAIL:<br>
-                                    <input type="text" name="identifier" size="15" required><br><br>
+                                    EMAIL:<br>
+                                    <input type="email" name="email" size="15" required><br><br>
                                     PASSWORD:<br>
                                     <input type="password" name="password" size="15" required><br><br>
                                     <input type="submit" value="LOGIN">
@@ -188,7 +157,7 @@
                 <br>
                 <h2><font color="yellow">PICTURE</font></h2>
                 
-                <center><img src="pic4.PNG" style="max-width: 75%; height: auto;"></center>
+                <center><img src="pic3.png" style="max-width: 75%; height: auto;"></center>
                 
                 <br>
 
