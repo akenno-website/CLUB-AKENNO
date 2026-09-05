@@ -173,29 +173,45 @@
         }
 
         // -------------------------------------------------------------
-        // HEAD CLICKER & LEADERBOARD LOGIC
+        // HEAD CLICKER & LEADERBOARD LOGIC (THROTTLED & BATCHED)
         // -------------------------------------------------------------
-        window.clickHead = async function() {
+        let pendingClicks = 0;
+        let clickFlushTimer = null;
+        
+        window.clickHead = function() {
             const currentUser = auth.currentUser;
             if (!currentUser) return;
-
-            const userRef = doc(db, "leaderboard", currentUser.uid);
-            const username = currentUser.displayName || currentUser.email;
-
-            // Bounce effect
+        
+            // 1. Instant UI Feedback (Bounce effect)
             const img = document.getElementById("akennoHead");
             img.style.transform = "scale(0.85)";
             setTimeout(() => { img.style.transform = "scale(1)"; }, 100);
-
-            try {
-                await setDoc(userRef, {
-                    username: username,
-                    clicks: increment(1),
-                    lastUpdated: serverTimestamp()
-                }, { merge: true });
-            } catch (err) {
-                console.error("Click error:", err);
-            }
+        
+            // 2. Increment local counter instantly
+            pendingClicks++;
+        
+            // 3. Throttle Firestore Writes: Wait until the user stops clicking for 800ms
+            if (clickFlushTimer) clearTimeout(clickFlushTimer);
+        
+            clickFlushTimer = setTimeout(async () => {
+                const clicksToSubmit = pendingClicks;
+                pendingClicks = 0; // Reset counter locally before async call
+        
+                const userRef = doc(db, "leaderboard", currentUser.uid);
+                const username = currentUser.displayName || currentUser.email;
+        
+                try {
+                    await setDoc(userRef, {
+                        username: username,
+                        clicks: increment(clicksToSubmit),
+                        lastUpdated: serverTimestamp()
+                    }, { merge: true });
+                } catch (err) {
+                    console.error("Click sync error:", err);
+                    // Put clicks back into queue if the network request fails
+                    pendingClicks += clicksToSubmit; 
+                }
+            }, 800); // Adjust millisecond threshold as needed
         };
 
         function listenToLeaderboard() {
