@@ -1,32 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>*** CLUB AKENNO - MEMBER PORTAL ***</title>
-
-    <style>
-        .blink {
-            animation: blinker 1s linear infinite;
-        }
-        @keyframes blinker {
-            50% { opacity: 0; }
-        }
-        .rainbow-text {
-            background-image: linear-gradient(to left, violet, indigo, blue, green, yellow, orange, red);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            font-weight: bold;
-        }
-    </style>
-
+    <title>*** CLUB AKENNO - MEMBER ZONE ***</title>
+    
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { 
-            getFirestore, collection, doc, setDoc, getDoc, updateDoc, 
-            increment, onSnapshot, query, orderBy, addDoc, serverTimestamp 
-        } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // REPLACE WITH YOUR FIREBASE CONFIG
         const firebaseConfig = {
             apiKey: "AIzaSyC5RIt66tqj_E7Xj_1UarhaIcGWezIVVVY",
             authDomain: "club-akenno.firebaseapp.com",
@@ -35,258 +15,73 @@
             messagingSenderId: "515392757059",
             appId: "1:515392757059:web:5185d8c5173aa0a4b6e3f6",
             measurementId: "G-9RWL6RHRJN"
-          };
+        };
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
-        const db = getFirestore(app);
 
-        let currentUser = null;
-        let currentUsername = "";
-
-        // Helper function to resolve display name / username
-        function getDisplayName(userData, defaultEmail) {
-            if (!userData) return defaultEmail ? defaultEmail.split('@')[0] : "Unknown";
-            return userData.username || userData.displayName || (userData.email ? userData.email.split('@')[0] : "Unknown");
-        }
-
-        // AUTH CHECK & SETUP
-        onAuthStateChanged(auth, async (user) => {
-            if (!user) {
-                // Kick unauthenticated users out
-                window.location.href = "index.html";
-                return;
-            }
-
-            currentUser = user;
-
-            // Grant Admin Panel access to all users
-            const adminDiv = document.getElementById("adminControls");
-            if (adminDiv) adminDiv.style.display = "block";
-
-            // Sync or Create user doc in Firestore (Role set to Admin)
-            const userRef = doc(db, "users", user.uid);
-            const userSnap = await getDoc(userRef);
-
-            if (!userSnap.exists()) {
-                currentUsername = user.displayName || user.email.split('@')[0];
-                await setDoc(userRef, {
-                    email: user.email,
-                    username: currentUsername,
-                    role: "Admin",
-                    status: "ACTIVE",
-                    clout: 0
-                });
+        // Protect page: Redirect if not logged in
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                const userDisplay = user.displayName || user.email;
+                document.getElementById("userGreeting").innerText = userDisplay;
+                document.getElementById("memberStatus").innerText = "STATUS: ACTIVE MEMBER";
             } else {
-                const data = userSnap.data();
-                currentUsername = getDisplayName(data, user.email);
-                // Update existing users to Admin
-                await updateDoc(userRef, { role: "Admin" });
+                // Redirect back to login if unauthorized
+                alert("ACCESS DENIED: You must log in first!");
+                window.location.href = "index.html";
             }
-
-            document.getElementById("userEmailDisplay").innerText = currentUsername;
-
-            // Start Realtime Listeners
-            listenToUserClout(user.uid);
-            listenToLeaderboardAndRoster();
-            listenToAnnouncements();
-            listenToShouts();
         });
 
-        // LOGOUT
-        window.handleLogout = function() {
-            signOut(auth).then(() => {
+        // Logout Handler
+        window.handleLogout = async function() {
+            try {
+                await signOut(auth);
+                alert("LOGGED OUT SUCCESSFULLY.");
                 window.location.href = "index.html";
-            });
+            } catch (err) {
+                alert("LOGOUT ERROR: " + err.message);
+            }
         };
-
-        // --- CLOUT LOGIC ---
-        function listenToUserClout(uid) {
-            onSnapshot(doc(db, "users", uid), (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    document.getElementById("myCloutDisplay").innerText = (data.clout || 0).toLocaleString();
-
-                    // Keep displayed username synced if changed in database
-                    const name = getDisplayName(data, currentUser ? currentUser.email : "");
-                    document.getElementById("userEmailDisplay").innerText = name;
-                    currentUsername = name;
-                }
-            });
-        }
-
-        window.addClout = async function() {
-            if (!currentUser) return;
-            const userRef = doc(db, "users", currentUser.uid);
-            await updateDoc(userRef, {
-                clout: increment(1)
-            });
-        };
-
-        // --- LEADERBOARD & ROSTER LOGIC ---
-        function listenToLeaderboardAndRoster() {
-            const usersRef = collection(db, "users");
-            onSnapshot(usersRef, (snapshot) => {
-                let members = [];
-                snapshot.forEach((docSnap) => {
-                    members.push({ id: docSnap.id, ...docSnap.data() });
-                });
-
-                // Sort by clout descending
-                members.sort((a, b) => (b.clout || 0) - (a.clout || 0));
-
-                // Render Leaderboard
-                let lbHtml = "";
-                members.forEach((m, index) => {
-                    const rank = "#" + (index + 1);
-                    const name = getDisplayName(m, m.email);
-                    const userDisplay = m.status === "BANNED" ? "<s>" + name + "</s>" : name;
-                    const points = m.clout || 0;
-                    const ptColor = points < 0 ? "#FF0000" : "#FFFF00";
-
-                    lbHtml += "<tr>";
-                    lbHtml += "<td align='center'><b>" + rank + "</b></td>";
-                    lbHtml += "<td><font color='#00FF00'>" + userDisplay + "</font></td>";
-                    lbHtml += "<td align='center'><font color='#00FFFF'>" + (m.role || "Admin") + "</font></td>";
-                    lbHtml += "<td align='right'><font color='" + ptColor + "'>" + points.toLocaleString() + "</font></td>";
-                    lbHtml += "</tr>";
-                });
-                document.getElementById("leaderboardBody").innerHTML = lbHtml;
-
-                // Render Roster
-                let rosHtml = "";
-                members.forEach((mem) => {
-                    const name = getDisplayName(mem, mem.email);
-                    const status = mem.status || "ACTIVE";
-                    const statusColor = status === "ACTIVE" ? "#00FF00" : (status === "BANNED" ? "#FF0000" : "#FFFF00");
-
-                    rosHtml += "<tr>";
-                    rosHtml += "<td>" + name + "</td>";
-                    rosHtml += "<td><font color='" + statusColor + "'>" + status + "</font></td>";
-                    rosHtml += "<td>" + (mem.role || "Admin") + "</td>";
-                    rosHtml += "</tr>";
-                });
-                document.getElementById("rosterBody").innerHTML = rosHtml;
-            });
-        }
-
-        // --- ANNOUNCEMENTS LOGIC ---
-        window.postAnnouncement = async function(e) {
-            e.preventDefault();
-            const msgInput = document.getElementById("adminMsg");
-            const msgText = msgInput.value.trim();
-            if (!msgText) return;
-
-            await addDoc(collection(db, "announcements"), {
-                author: currentUsername,
-                text: msgText,
-                timestamp: serverTimestamp()
-            });
-
-            msgInput.value = "";
-        };
-
-        function listenToAnnouncements() {
-            const q = query(collection(db, "announcements"), orderBy("timestamp", "desc"));
-            onSnapshot(q, (snapshot) => {
-                const display = document.getElementById("announcementDisplay");
-                if (snapshot.empty) {
-                    display.innerHTML = "<i>No announcements posted yet.</i>";
-                    return;
-                }
-                let html = "";
-                snapshot.forEach((docSnap) => {
-                    const data = docSnap.data();
-                    const time = data.timestamp ? new Date(data.timestamp.toDate()).toLocaleTimeString() : "Just now";
-                    html += "<p><b>[" + (data.author || "Unknown") + " @ " + time + "]:</b> " + data.text + "</p><hr color='#00FF00' size='1'>";
-                });
-                display.innerHTML = html;
-            });
-        }
-
-        // --- SHOUTBOX LOGIC ---
-        window.postShout = async function(e) {
-            e.preventDefault();
-            const input = document.getElementById("shoutInput");
-            const msg = input.value.trim();
-            if (!msg) return;
-
-            await addDoc(collection(db, "shouts"), {
-                user: currentUsername,
-                text: msg,
-                timestamp: serverTimestamp()
-            });
-
-            input.value = "";
-        };
-
-        function listenToShouts() {
-            const q = query(collection(db, "shouts"), orderBy("timestamp", "asc"));
-            onSnapshot(q, (snapshot) => {
-                const box = document.getElementById("shoutbox");
-                if (snapshot.empty) {
-                    box.innerHTML = "<i>No shouts yet. Talk trash below.</i>";
-                    return;
-                }
-                let html = "";
-                snapshot.forEach((docSnap) => {
-                    const data = docSnap.data();
-                    html += "<p><b>&lt;" + (data.user || "Anonymous") + "&gt;:</b> " + data.text + "</p>";
-                });
-                box.innerHTML = html;
-                box.scrollTop = box.scrollHeight;
-            });
-        }
     </script>
 </head>
 <body bgcolor="#000000" text="#00FF00" link="#FF00FF" vlink="#00FFFF" background="https://www.transparenttextures.com/patterns/stardust.png">
 
     <center>
         <font size="6" face="Comic Sans MS, Arial" color="#FFFF00">
-            <b>*** WELCOME TO THE SECRET MEMBER AREA ***</b>
+            <b>*** WELCOME TO THE SECRET MEMBER HEADQUARTERS ***</b>
         </font>
-        <br>
-        <span class="blink"><font color="#FF0000" size="4"><b>[ NEW FEATURES ADDED! ]</b></font></span>
         <br><br>
         <marquee scrollamount="8" width="80%">
-            <font color="#00FF00"><b>*** ACCESS GRANTED *** ADMIN PRIVILEGES UNLOCKED *** WELCOME BACK SUPREME LEADER ***</b></font>
+            <font color="#00FF00"><b>*** ACCESS GRANTED *** WELCOME BACK, <span id="userGreeting">MEMBER</span>! ***</b></font>
         </marquee>
     </center>
 
-    <hr size="5" color="#FF00FF">
+    <hr size="5" color="#00FF00">
 
     <table border="5" cellpadding="10" cellspacing="5" width="90%" align="center" bgcolor="#000033">
         <tr>
+            <!-- Left Sidebar Profile Panel -->
             <td width="30%" valign="top" bgcolor="#111111">
-                <table border="2" bgcolor="#000080" width="100%" cellpadding="5">
+                
+                <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
                     <tr>
-                        <td align="center">
-                            <font color="#FFFFFF" face="Arial" size="2"><b>[ USER STATUS ]</b></font>
+                        <td align="center" bgcolor="#008000">
+                            <font color="#FFFFFF" face="Arial" size="2"><b>[ USER CONTROL PANEL ]</b></font>
                         </td>
                     </tr>
                     <tr>
-                        <td align="center" bgcolor="#000000">
+                        <td>
                             <font face="Courier New" size="2" color="#00FF00">
-                                USER: <b id="userEmailDisplay">Loading...</b><br>
-                                ROLE: <b class="rainbow-text">ADMINISTRATOR</b><br>
-                                STATUS: <b>LOGGED IN</b><br><br>
-                                <a href="#" onclick="handleLogout()">
-                                    <font color="#FF0000">[ LOGOUT ]</font>
-                                </a>
-                            </font>
-                        </td>
-                    </tr>
-                </table>
+                                <b>USER STATUS:</b><br>
+                                <span id="memberStatus" color="#00FFFF">AUTHENTICATING...</span><br><br>
+                                
+                                <b>CLEARANCE LEVEL:</b><br>
+                                <font color="#FFFF00">LEVEL 5 CLUBBER</font><br><br>
 
-                <br>
-                <!-- MIDI Player Widget -->
-                <table border="2" bgcolor="#222222" width="100%" cellpadding="3">
-                    <tr>
-                        <td align="center">
-                            <font size="1" face="Courier New" color="#00FFFF">
-                                <b>♫ BACKGROUND MIDI ♫</b><br>
-                                <button onclick="alert('♫ Playing club_theme.mid ♫')" style="font-size:10px;">▶ PLAY</button>
-                                <button onclick="alert('Muted!')" style="font-size:10px;">█ STOP</button>
+                                <button onclick="handleLogout()" style="background-color: #800000; color: #FFFFFF; font-family: Courier; font-weight: bold; cursor: pointer;">
+                                    [ LOGOUT ]
+                                </button>
                             </font>
                         </td>
                     </tr>
@@ -295,115 +90,50 @@
                 <br><hr color="#FF00FF"><br>
 
                 <font face="Times New Roman" color="#FFFFFF">
-                    <h3><b><u>VIP NAVIGATION</u></b></h3>
+                    <h3><b><u>SECRET NAVIGATION</u></b></h3>
                     <ul>
-                        <li><a href="home_logged_in.html">Member Home</a></li>
-                        <li><a href="gallery.html?access=pro">Media Gallery</a></li>
-                        <li><a href="about.html">About Me</a></li>
+                        <li><a href="home_logged_in.html">Member HQ</a></li>
+                        <li><a href="#chat">VIP Chatroom</a></li>
+                        <li><a href="#downloads">Exclusive Downloads</a></li>
                     </ul>
-                    <br>
-                    <center>
-                        <img src="pic1.png" style="max-width: 75%; height: auto;"><br><br>
-                        <img src="pic2.jpg" style="max-width: 75%; height: auto;"><br><br>
-                        <font size="1" color="#FF00FF" class="blink">★ BEST VIEWED IN NETSCAPE NAVIGATOR 4.0 ★</font>
-                    </center>
                 </font>
             </td>
 
+            <!-- Main Content Area -->
             <td width="70%" valign="top">
                 <h2><font color="#00FFFF" face="Comic Sans MS">Member Dashboard</font></h2>
-
-                <div id="adminControls" style="display:none;">
-                    <table border="2" bordercolor="#FF0000" bgcolor="#220000" width="100%" cellpadding="8">
-                        <tr>
-                            <td>
-                                <font color="#FF0000" face="Courier New">
-                                    <b>[ SUPREME LEADER COMMAND CONSOLE ]</b>
-                                </font>
-                                <br><br>
-                                <form onsubmit="postAnnouncement(event)">
-                                    Broadcast Announcement:<br>
-                                    <input type="text" id="adminMsg" size="30" placeholder="Type stuff to broadcast...">
-                                    <input type="submit" value="BROADCAST">
-                                </form>
-                            </td>
-                        </tr>
-                    </table>
-                    <br>
-                </div>
-
-                <h3><font color="#FFFF00">Club Announcements</font></h3>
-                <div id="announcementDisplay" style="background:#000; padding:10px; border:1px solid #00FF00;"></div>
+                <p>
+                    Congratulations! You have bypassed security and logged into the official inner circle.
+                </p>
 
                 <hr color="#00FF00">
+
+                <br>
+                <h2><font color="yellow">EXCLUSIVE MEMBER CONTENT</font></h2>
                 
+                <table border="1" cellpadding="8" bgcolor="#000000" width="100%">
+                    <tr>
+                        <th><font color="#FF00FF">FILE NAME</font></th>
+                        <th><font color="#FF00FF">SIZE</font></th>
+                        <th><font color="#FF00FF">STATUS</font></th>
+                    </tr>
+                    <tr>
+                        <td><font color="#00FF00">secret_midi_file.mid</font></td>
+                        <td><font color="#00FF00">24 KB</font></td>
+                        <td><font color="#FFFF00">AVAILABLE</font></td>
+                    </tr>
+                    <tr>
+                        <td><font color="#00FF00">cool_cursor_pack.zip</font></td>
+                        <td><font color="#00FF00">1.2 MB</font></td>
+                        <td><font color="#FFFF00">AVAILABLE</font></td>
+                    </tr>
+                </table>
+
+                <br><br>
                 <center>
-                    <table border="4" bordercolor="#FFFF00" bgcolor="#000000" cellpadding="10" width="80%">
-                        <tr>
-                            <td align="center">
-                                <font color="#FF00FF" size="5" face="Comic Sans MS">
-                                    <b>*** CLOUT CLICKER 2000 ***</b>
-                                </font>
-                                <br>
-                                <font color="#00FFFF" size="2">
-                                    CLICK THE BUTTON TO FARM UNLIMITED CLOUT
-                                </font>
-                                <br><br>
-
-                                <font size="6" color="#00FF00" face="Courier New">
-                                    YOUR CLOUT: <span id="myCloutDisplay">0</span>
-                                </font>
-                                <br><br>
-
-                                <button onclick="addClout()" style="font-size:20px; background-color:#FF00FF; color:#FFFF00; border:3px outset #FFFFFF; cursor:pointer;">
-                                    <b>[ +1 CLOUT ]</b>
-                                </button>
-                            </td>
-                        </tr>
-                    </table>
+                    <font color="#FF0000" size="4"><b>[ UNDER EXCLUSIVE CONSTRUCTION ]</b></font><br>
+                    <img src="underconstruction.gif">
                 </center>
-
-                <br>
-                <hr color="#00FF00">
-
-                <h3><font color="#FF00FF">Official Club Leaderboard (Realtime Firebase)</font></h3>
-                <table border="3" cellpadding="5" cellspacing="2" width="100%" bgcolor="#000000" bordercolor="#FF00FF">
-                    <thead>
-                        <tr bgcolor="#000080">
-                            <th align="center"><font color="#FFFFFF">RANK</font></th>
-                            <th align="left"><font color="#FFFFFF">MEMBER</font></th>
-                            <th align="center"><font color="#FFFFFF">TITLE</font></th>
-                            <th align="right"><font color="#FFFFFF">CLOUT POINTS</font></th>
-                        </tr>
-                    </thead>
-                    <tbody id="leaderboardBody">
-                        </tbody>
-                </table>
-
-                <hr color="#00FF00">
-
-                <h3><font color="#00FFFF">Active Member Roster</font></h3>
-                <table border="1" cellpadding="4" width="100%" bgcolor="#000000">
-                    <thead>
-                        <tr bgcolor="#111111">
-                            <td><b>USERNAME</b></td>
-                            <td><b>STATUS</b></td>
-                            <td><b>ROLE</b></td>
-                        </tr>
-                    </thead>
-                    <tbody id="rosterBody">
-                        </tbody>
-                </table>
-
-                <hr color="#00FF00">
-
-                <h3><font color="#FFFF00">Club Shoutbox</font></h3>
-                <div id="shoutbox" style="background:#000; height:100px; overflow-y:scroll; border:1px solid #00FF00; padding:5px;"></div>
-                <br>
-                <form onsubmit="postShout(event)">
-                    <input type="text" id="shoutInput" placeholder="Type a shout..." size="30">
-                    <input type="submit" value="SHOUT!">
-                </form>
             </td>
         </tr>
     </table>
@@ -413,14 +143,7 @@
     <center>
         <hr size="3" color="#FF00FF" width="50%">
         <font color="#FFFFFF" size="2">
-            VISITOR COUNTER:<br>
-            <table border="1" bgcolor="#000000" cellpadding="3">
-                <tr>
-                    <td><font color="#00FF00" face="Courier"><b>000042</b></font></td>
-                </tr>
-            </table>
-            <br>
-            <i>Copyright &copy; 2026 Club Akenno. All Rights Reserved.</i>
+            <i>Copyright &copy; 2026 Club Akenno. VIP Area.</i>
         </font>
     </center>
 
