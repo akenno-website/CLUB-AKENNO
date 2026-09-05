@@ -32,14 +32,14 @@
             if (user) {
                 const username = user.displayName || user.email;
                 document.getElementById("welcomeMsg").innerText = "WELCOME, MEMBER " + username.toUpperCase() + "!";
-                document.getElementById("userInfo").innerText = "Logged in as: " + user.email;
-
+                document.getElementById("userInfo").innerHTML = "Logged in as: " + user.email + "<br>Session: " + crypto.randomUUID();
+        
                 // Check Admin Access
                 isUserAdminGlobal = ADMIN_IDENTIFIERS.some(id => 
                     id.toLowerCase() === (user.displayName || "").toLowerCase() || 
                     id.toLowerCase() === user.email.toLowerCase()
                 );
-
+        
                 if (isUserAdminGlobal) {
                     document.getElementById("adminPanel").style.display = "block";
                 }
