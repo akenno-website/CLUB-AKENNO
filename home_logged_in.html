@@ -23,7 +23,7 @@
         const db = getFirestore(app);
 
         // -------------------------------------------------------------
-        // SET YOUR ADMIN IDENTIFIERS HERE (Username or Email)
+        // ADMIN IDENTIFIERS
         // -------------------------------------------------------------
         const ADMIN_IDENTIFIERS = ["admin", "akennmasangkay@gmail.com"]; 
         let isUserAdminGlobal = false;
@@ -54,7 +54,9 @@
             }
         });
 
-        // Publish Announcement Function
+        // -------------------------------------------------------------
+        // ANNOUNCEMENT FUNCTIONS
+        // -------------------------------------------------------------
         window.postAnnouncement = async function(event) {
             event.preventDefault();
             const text = document.forms["announcementForm"]["announceText"].value.trim();
@@ -76,7 +78,6 @@
             }
         };
 
-        // Delete Announcement Function
         window.deleteAnnouncement = async function(docId) {
             if (confirm("ARE YOU SURE YOU WANT TO DELETE THIS BROADCAST?")) {
                 try {
@@ -88,7 +89,6 @@
             }
         };
 
-        // Real-Time Announcement Feed Stream
         function listenToAnnouncements() {
             const annQuery = query(collection(db, "announcements"), orderBy("timestamp", "desc"));
             onSnapshot(annQuery, (snapshot) => {
@@ -111,7 +111,6 @@
                                     <b>[BROADCAST FROM: ${data.author || "ADMIN"}]</b>
                                 </font>`;
                     
-                    // Show delete button only if current user is admin
                     if (isUserAdminGlobal) {
                         card += `<button onclick="deleteAnnouncement('${docId}')" style="background-color: #FF0000; color: #FFFFFF; font-weight: bold; cursor: pointer; border: 1px solid #FFF;">DELETE</button>`;
                     }
@@ -133,7 +132,7 @@
         }
 
         // -------------------------------------------------------------
-        // SHOUTBOX REALTIME LOGIC
+        // SHOUTBOX LOGIC
         // -------------------------------------------------------------
         window.postShout = async function(event) {
             event.preventDefault();
@@ -173,33 +172,38 @@
         }
 
         // -------------------------------------------------------------
-        // HEAD CLICKER & LEADERBOARD LOGIC (THROTTLED & BATCHED)
+        // HEAD CLICKER & LEADERBOARD (INSTANT UI + DEBOUNCED FIRESTORE)
         // -------------------------------------------------------------
         let pendingClicks = 0;
         let clickFlushTimer = null;
-        
+        let currentLocalScore = 0;
+
         window.clickHead = function() {
             const currentUser = auth.currentUser;
             if (!currentUser) return;
-        
-            // 1. Instant UI Feedback (Bounce effect)
+
+            // 1. Instant UI Bounce
             const img = document.getElementById("akennoHead");
             img.style.transform = "scale(0.85)";
             setTimeout(() => { img.style.transform = "scale(1)"; }, 100);
-        
-            // 2. Increment local counter instantly
+
+            // 2. Increment local counters instantly
             pendingClicks++;
-        
-            // 3. Throttle Firestore Writes: Wait until the user stops clicking for 800ms
+            currentLocalScore++;
+
+            // 3. Update DOM instantly
+            updateLocalLeaderboardUI(currentUser.uid, currentLocalScore);
+
+            // 4. Throttle Firestore Writes (Debounce 800ms)
             if (clickFlushTimer) clearTimeout(clickFlushTimer);
-        
+
             clickFlushTimer = setTimeout(async () => {
                 const clicksToSubmit = pendingClicks;
-                pendingClicks = 0; // Reset counter locally before async call
-        
+                pendingClicks = 0;
+
                 const userRef = doc(db, "leaderboard", currentUser.uid);
                 const username = currentUser.displayName || currentUser.email;
-        
+
                 try {
                     await setDoc(userRef, {
                         username: username,
@@ -208,28 +212,48 @@
                     }, { merge: true });
                 } catch (err) {
                     console.error("Click sync error:", err);
-                    // Put clicks back into queue if the network request fails
-                    pendingClicks += clicksToSubmit; 
+                    pendingClicks += clicksToSubmit; // Re-queue failed clicks
                 }
-            }, 800); // Adjust millisecond threshold as needed
+            }, 800);
         };
+
+        function updateLocalLeaderboardUI(userId, newScore) {
+            const userRow = document.getElementById(`score-${userId}`);
+            if (userRow) {
+                userRow.innerText = newScore;
+            }
+        }
 
         function listenToLeaderboard() {
             const lbQuery = query(collection(db, "leaderboard"), orderBy("clicks", "desc"), limit(10));
             onSnapshot(lbQuery, (snapshot) => {
                 const lbTable = document.getElementById("leaderboardEntries");
+                const currentUser = auth.currentUser;
                 lbTable.innerHTML = "";
+
                 if (snapshot.empty) {
                     lbTable.innerHTML = "<tr><td colspan='3' align='center'>No head clicks recorded yet!</td></tr>";
                     return;
                 }
+
                 let rank = 1;
                 snapshot.forEach((docSnap) => {
                     const data = docSnap.data();
+                    const isCurrentUser = currentUser && docSnap.id === currentUser.uid;
+
+                    // Reconcile local score baseline with server state
+                    if (isCurrentUser) {
+                        currentLocalScore = (data.clicks || 0) + pendingClicks;
+                    }
+
+                    const displayClicks = isCurrentUser ? currentLocalScore : (data.clicks || 0);
+
                     lbTable.innerHTML += `<tr>
                         <td align="center"><font color="#FF00FF">${rank}</font></td>
                         <td><font color="#00FFFF">${data.username}</font></td>
-                        <td align="right"><font color="#00FF00">${data.clicks || 0}</font></td>
+                        <td align="right">
+                            <font color="#00FF00" id="score-${docSnap.id}">${displayClicks}</font>
+                        </td>
                     </tr>`;
                     rank++;
                 });
