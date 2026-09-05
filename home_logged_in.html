@@ -6,7 +6,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, doc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyC5RIt66tqj_E7Xj_1UarhaIcGWezIVVVY",
@@ -26,6 +26,7 @@
         // SET YOUR ADMIN IDENTIFIERS HERE (Username or Email)
         // -------------------------------------------------------------
         const ADMIN_IDENTIFIERS = ["admin", "akennmasangkay@gmail.com"]; 
+        let isUserAdminGlobal = false;
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
@@ -34,14 +35,17 @@
                 document.getElementById("userInfo").innerText = "Logged in as: " + user.email;
 
                 // Check Admin Access
-                const isUserAdmin = ADMIN_IDENTIFIERS.some(id => 
+                isUserAdminGlobal = ADMIN_IDENTIFIERS.some(id => 
                     id.toLowerCase() === (user.displayName || "").toLowerCase() || 
                     id.toLowerCase() === user.email.toLowerCase()
                 );
 
-                if (isUserAdmin) {
+                if (isUserAdminGlobal) {
                     document.getElementById("adminPanel").style.display = "block";
                 }
+                
+                // Re-render feed once auth status is finalized
+                listenToAnnouncements();
             } else {
                 alert("RESTRICTED AREA: You must be logged in to view this page.");
                 window.location.href = "index.html";
@@ -70,39 +74,61 @@
             }
         };
 
-        // Real-Time Announcement Feed Stream
-        const annQuery = query(collection(db, "announcements"), orderBy("timestamp", "desc"));
-        onSnapshot(annQuery, (snapshot) => {
-            const feedContainer = document.getElementById("announcementFeed");
-            feedContainer.innerHTML = "";
-
-            if (snapshot.empty) {
-                feedContainer.innerHTML = "<i>No announcements broadcasted yet...</i>";
-                return;
-            }
-
-            snapshot.forEach((doc) => {
-                const data = doc.data();
-                let card = `<table border="2" width="100%" bgcolor="#000000" cellpadding="8" style="margin-bottom: 15px;">
-                    <tr>
-                        <td bgcolor="#800080">
-                            <font color="#FFFF00" face="Courier New" size="2">
-                                <b>[BROADCAST FROM: ${data.author || "ADMIN"}]</b>
-                            </font>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>
-                            <font color="#00FF00" face="Arial" size="3"><p>${data.text}</p></font>`;
-                
-                if (data.imageUrl) {
-                    card += `<center><img src="${data.imageUrl}" style="max-width: 80%; height: auto; border: 2px solid #FF00FF; margin-top: 5px;"></center>`;
+        // Delete Announcement Function
+        window.deleteAnnouncement = async function(docId) {
+            if (confirm("ARE YOU SURE YOU WANT TO DELETE THIS BROADCAST?")) {
+                try {
+                    await deleteDoc(doc(db, "announcements", docId));
+                    alert("BROADCAST PURGED!");
+                } catch (err) {
+                    alert("DELETE ERROR: " + err.message);
                 }
-                
-                card += `</td></tr></table>`;
-                feedContainer.innerHTML += card;
+            }
+        };
+
+        // Real-Time Announcement Feed Stream
+        function listenToAnnouncements() {
+            const annQuery = query(collection(db, "announcements"), orderBy("timestamp", "desc"));
+            onSnapshot(annQuery, (snapshot) => {
+                const feedContainer = document.getElementById("announcementFeed");
+                feedContainer.innerHTML = "";
+
+                if (snapshot.empty) {
+                    feedContainer.innerHTML = "<i>No announcements broadcasted yet...</i>";
+                    return;
+                }
+
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    const docId = docSnap.id;
+
+                    let card = `<table border="2" width="100%" bgcolor="#000000" cellpadding="8" style="margin-bottom: 15px;">
+                        <tr>
+                            <td bgcolor="#800080" style="display: flex; justify-content: space-between; align-items: center;">
+                                <font color="#FFFF00" face="Courier New" size="2">
+                                    <b>[BROADCAST FROM: ${data.author || "ADMIN"}]</b>
+                                </font>`;
+                    
+                    // Show delete button only if current user is admin
+                    if (isUserAdminGlobal) {
+                        card += `<button onclick="deleteAnnouncement('${docId}')" style="background-color: #FF0000; color: #FFFFFF; font-weight: bold; cursor: pointer; border: 1px solid #FFF;">DELETE</button>`;
+                    }
+
+                    card += `</td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <font color="#00FF00" face="Arial" size="3"><p>${data.text}</p></font>`;
+                    
+                    if (data.imageUrl) {
+                        card += `<center><img src="${data.imageUrl}" style="max-width: 80%; height: auto; border: 2px solid #FF00FF; margin-top: 5px;"></center>`;
+                    }
+                    
+                    card += `</td></tr></table>`;
+                    feedContainer.innerHTML += card;
+                });
             });
-        });
+        }
 
         // Logout Handler
         window.handleLogout = async function() {
