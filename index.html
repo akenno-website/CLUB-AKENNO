@@ -6,8 +6,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // REPLACE THESE WITH YOUR FIREBASE PROJECT CONFIG
         const firebaseConfig = {
             apiKey: "AIzaSyC5RIt66tqj_E7Xj_1UarhaIcGWezIVVVY",
             authDomain: "club-akenno.firebaseapp.com",
@@ -20,22 +20,34 @@
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
+        const db = getFirestore(app);
 
-        // Keep track of auth state
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 console.log("Logged in as:", user.displayName || user.email);
             }
         });
 
-        // Login Handler
+        // Login Handler (Supports Username OR Email)
         window.handleLogin = async function(event) {
             event.preventDefault();
-            const email = document.forms["loginForm"]["email"].value.trim();
+            const userInput = document.forms["loginForm"]["usernameOrEmail"].value.trim();
             const pass = document.forms["loginForm"]["password"].value.trim();
 
+            let targetEmail = userInput;
+
             try {
-                const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+                if (!userInput.includes("@")) {
+                    const usernameRef = doc(db, "usernames", userInput.toLowerCase());
+                    const usernameSnap = await getDoc(usernameRef);
+
+                    if (!usernameSnap.exists()) {
+                        throw new Error("Username not found.");
+                    }
+                    targetEmail = usernameSnap.data().email;
+                }
+
+                const userCredential = await signInWithEmailAndPassword(auth, targetEmail, pass);
                 const displayName = userCredential.user.displayName || userCredential.user.email;
                 alert("ACCESS GRANTED: Welcome back, " + displayName + "!");
                 window.location.href = "home_logged_in.html";
@@ -51,12 +63,24 @@
             const email = document.forms["registerForm"]["regEmail"].value.trim();
             const pass = document.forms["registerForm"]["regPassword"].value.trim();
 
+            const usernameKey = username.toLowerCase();
+            const usernameRef = doc(db, "usernames", usernameKey);
+
             try {
+                const usernameSnap = await getDoc(usernameRef);
+                if (usernameSnap.exists()) {
+                    throw new Error("That username is already taken!");
+                }
+
                 const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-                // Save the username to the Firebase Auth profile
-                await updateProfile(userCredential.user, {
-                    displayName: username
+
+                await updateProfile(userCredential.user, { displayName: username });
+
+                await setDoc(usernameRef, {
+                    email: email,
+                    uid: userCredential.user.uid
                 });
+
                 alert("ACCOUNT CREATED: Welcome to the club, " + username + "!");
                 window.location.href = "home_logged_in.html";
             } catch (err) {
@@ -93,8 +117,8 @@
                         <td>
                             <form name="loginForm" onsubmit="handleLogin(event)">
                                 <font face="Courier New" size="2" color="#00FF00">
-                                    EMAIL:<br>
-                                    <input type="email" name="email" size="15" required><br><br>
+                                    USERNAME OR EMAIL:<br>
+                                    <input type="text" name="usernameOrEmail" size="15" required><br><br>
                                     PASSWORD:<br>
                                     <input type="password" name="password" size="15" required><br><br>
                                     <input type="submit" value="LOGIN">
@@ -158,7 +182,7 @@
                 <br>
                 <h2><font color="yellow">PICTURE</font></h2>
                 
-                <center><img src="pic4.PNG" style="max-width: 75%; height: auto;"></center>
+                <center><img src="pic3.png" style="max-width: 75%; height: auto;"></center>
                 
                 <br>
 
