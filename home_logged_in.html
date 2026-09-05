@@ -6,6 +6,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyC5RIt66tqj_E7Xj_1UarhaIcGWezIVVVY",
@@ -19,17 +20,37 @@
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
+        const db = getFirestore(app);
 
-        // Protect page: Redirect if not logged in
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                const userDisplay = user.displayName || user.email;
-                document.getElementById("userGreeting").innerText = userDisplay;
-                document.getElementById("memberStatus").innerText = "STATUS: ACTIVE MEMBER";
-            } else {
-                // Redirect back to login if unauthorized
-                alert("ACCESS DENIED: You must log in first!");
+        let currentUsername = "";
+
+        // Protect page & load user profile from Firestore
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                alert("ACCESS DENIED: Please log in first!");
                 window.location.href = "index.html";
+                return;
+            }
+
+            try {
+                // Fetch user data directly from the 'users' collection using UID
+                const userDocRef = doc(db, "users", user.uid);
+                const userSnap = await getDoc(userDocRef);
+
+                if (userSnap.exists() && userSnap.data().username) {
+                    currentUsername = userSnap.data().username;
+                } else {
+                    currentUsername = user.displayName || "Member";
+                }
+
+                document.getElementById("userDisplay").innerText = currentUsername;
+                document.getElementById("memberStatus").innerText = "STATUS: ACTIVE MEMBER";
+                
+                // Initialize real-time list listeners
+                listenToLeaderboardAndRoster();
+            } catch (err) {
+                console.error("Error fetching user profile:", err);
+                document.getElementById("userDisplay").innerText = user.displayName || "Member";
             }
         });
 
@@ -43,6 +64,56 @@
                 alert("LOGOUT ERROR: " + err.message);
             }
         };
+
+        // Realtime Listener for Leaderboard & Roster using direct Firestore data
+        function listenToLeaderboardAndRoster() {
+            const usersRef = collection(db, "users");
+            onSnapshot(usersRef, (snapshot) => {
+                let members = [];
+                snapshot.forEach((docSnap) => {
+                    members.push({ id: docSnap.id, ...docSnap.data() });
+                });
+
+                members.sort((a, b) => (b.clout || 0) - (a.clout || 0));
+
+                // Render Leaderboard
+                let lbHtml = "";
+                members.forEach((m, index) => {
+                    const rank = "#" + (index + 1);
+                    const name = m.username || "Unknown";
+                    const userText = m.status === "BANNED" ? "<s>" + name + "</s>" : name;
+                    const points = m.clout || 0;
+                    const ptColor = points < 0 ? "#FF0000" : "#FFFF00";
+
+                    lbHtml += "<tr>";
+                    lbHtml += "<td align='center'><b>" + rank + "</b></td>";
+                    lbHtml += "<td><font color='#00FF00'>" + userText + "</font></td>";
+                    lbHtml += "<td align='center'><font color='#00FFFF'>" + (m.role || "Member") + "</font></td>";
+                    lbHtml += "<td align='right'><font color='" + ptColor + "'>" + points.toLocaleString() + "</font></td>";
+                    lbHtml += "</tr>";
+                });
+                
+                const lbTable = document.getElementById("leaderboardBody");
+                if (lbTable) lbTable.innerHTML = lbHtml;
+
+                // Render Roster
+                let rosHtml = "";
+                members.forEach((mem) => {
+                    const name = mem.username || "Unknown";
+                    const status = mem.status || "ACTIVE";
+                    const statusColor = status === "ACTIVE" ? "#00FF00" : (status === "BANNED" ? "#FF0000" : "#FFFF00");
+
+                    rosHtml += "<tr>";
+                    rosHtml += "<td>" + name + "</td>";
+                    rosHtml += "<td><font color='" + statusColor + "'>" + status + "</font></td>";
+                    rosHtml += "<td>" + (mem.role || "Member") + "</td>";
+                    rosHtml += "</tr>";
+                });
+
+                const rosTable = document.getElementById("rosterBody");
+                if (rosTable) rosTable.innerHTML = rosHtml;
+            });
+        }
     </script>
 </head>
 <body bgcolor="#000000" text="#00FF00" link="#FF00FF" vlink="#00FFFF" background="https://www.transparenttextures.com/patterns/stardust.png">
@@ -53,7 +124,7 @@
         </font>
         <br><br>
         <marquee scrollamount="8" width="80%">
-            <font color="#00FF00"><b>*** ACCESS GRANTED *** WELCOME BACK, <span id="userGreeting">MEMBER</span>! ***</b></font>
+            <font color="#00FF00"><b>*** ACCESS GRANTED *** WELCOME BACK, <span id="userDisplay">...</span>! ***</b></font>
         </marquee>
     </center>
 
@@ -61,9 +132,8 @@
 
     <table border="5" cellpadding="10" cellspacing="5" width="90%" align="center" bgcolor="#000033">
         <tr>
-            <!-- Left Sidebar Profile Panel -->
+            <!-- Left Control Panel -->
             <td width="30%" valign="top" bgcolor="#111111">
-                
                 <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
                     <tr>
                         <td align="center" bgcolor="#008000">
@@ -74,7 +144,7 @@
                         <td>
                             <font face="Courier New" size="2" color="#00FF00">
                                 <b>USER STATUS:</b><br>
-                                <span id="memberStatus" color="#00FFFF">AUTHENTICATING...</span><br><br>
+                                <span id="memberStatus">AUTHENTICATING...</span><br><br>
                                 
                                 <b>CLEARANCE LEVEL:</b><br>
                                 <font color="#FFFF00">LEVEL 5 CLUBBER</font><br><br>
@@ -90,50 +160,54 @@
                 <br><hr color="#FF00FF"><br>
 
                 <font face="Times New Roman" color="#FFFFFF">
-                    <h3><b><u>SECRET NAVIGATION</u></b></h3>
+                    <h3><b><u>NAVIGATION</u></b></h3>
                     <ul>
                         <li><a href="home_logged_in.html">Member HQ</a></li>
-                        <li><a href="#chat">VIP Chatroom</a></li>
-                        <li><a href="#downloads">Exclusive Downloads</a></li>
+                        <li><a href="#leaderboard">Leaderboard</a></li>
+                        <li><a href="#roster">Club Roster</a></li>
                     </ul>
                 </font>
             </td>
 
-            <!-- Main Content Area -->
+            <!-- Main Dashboard Panel -->
             <td width="70%" valign="top">
                 <h2><font color="#00FFFF" face="Comic Sans MS">Member Dashboard</font></h2>
-                <p>
-                    Congratulations! You have bypassed security and logged into the official inner circle.
-                </p>
+                <p>Welcome to the encrypted inner circle.</p>
 
                 <hr color="#00FF00">
 
-                <br>
-                <h2><font color="yellow">EXCLUSIVE MEMBER CONTENT</font></h2>
-                
-                <table border="1" cellpadding="8" bgcolor="#000000" width="100%">
-                    <tr>
-                        <th><font color="#FF00FF">FILE NAME</font></th>
-                        <th><font color="#FF00FF">SIZE</font></th>
-                        <th><font color="#FF00FF">STATUS</font></th>
-                    </tr>
-                    <tr>
-                        <td><font color="#00FF00">secret_midi_file.mid</font></td>
-                        <td><font color="#00FF00">24 KB</font></td>
-                        <td><font color="#FFFF00">AVAILABLE</font></td>
-                    </tr>
-                    <tr>
-                        <td><font color="#00FF00">cool_cursor_pack.zip</font></td>
-                        <td><font color="#00FF00">1.2 MB</font></td>
-                        <td><font color="#FFFF00">AVAILABLE</font></td>
-                    </tr>
+                <a name="leaderboard"></a>
+                <h2><font color="yellow">CLUB LEADERBOARD</font></h2>
+                <table border="1" cellpadding="5" cellspacing="0" width="100%" bgcolor="#000000">
+                    <thead>
+                        <tr bgcolor="#000080">
+                            <th><font color="#FFFFFF">RANK</font></th>
+                            <th><font color="#FFFFFF">USERNAME</font></th>
+                            <th><font color="#FFFFFF">ROLE</font></th>
+                            <th><font color="#FFFFFF">CLOUT</font></th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboardBody">
+                        <tr><td colspan="4" align="center">Loading member rankings...</td></tr>
+                    </tbody>
                 </table>
 
                 <br><br>
-                <center>
-                    <font color="#FF0000" size="4"><b>[ UNDER EXCLUSIVE CONSTRUCTION ]</b></font><br>
-                    <img src="underconstruction.gif">
-                </center>
+
+                <a name="roster"></a>
+                <h2><font color="yellow">ACTIVE ROSTER</font></h2>
+                <table border="1" cellpadding="5" cellspacing="0" width="100%" bgcolor="#000000">
+                    <thead>
+                        <tr bgcolor="#800000">
+                            <th><font color="#FFFFFF">USERNAME</font></th>
+                            <th><font color="#FFFFFF">STATUS</font></th>
+                            <th><font color="#FFFFFF">ROLE</font></th>
+                        </tr>
+                    </thead>
+                    <tbody id="rosterBody">
+                        <tr><td colspan="3" align="center">Loading roster...</td></tr>
+                    </tbody>
+                </table>
             </td>
         </tr>
     </table>
@@ -143,7 +217,7 @@
     <center>
         <hr size="3" color="#FF00FF" width="50%">
         <font color="#FFFFFF" size="2">
-            <i>Copyright &copy; 2026 Club Akenno. VIP Area.</i>
+            <i>Copyright &copy; 2026 Club Akenno. All Rights Reserved.</i>
         </font>
     </center>
 
