@@ -3,12 +3,11 @@
 <head>
     <title>*** WELCOME TO CLUB YOU - OFFICIAL SITE ***</title>
     
-    <!-- Firebase Modular SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // REPLACE THESE WITH YOUR FIREBASE PROJECT CONFIG
         const firebaseConfig = {
             apiKey: "AIzaSyC5RIt66tqj_E7Xj_1UarhaIcGWezIVVVY",
             authDomain: "club-akenno.firebaseapp.com",
@@ -21,6 +20,7 @@
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
+        const db = getFirestore(app);
 
         // Keep track of auth state
         onAuthStateChanged(auth, (user) => {
@@ -29,30 +29,65 @@
             }
         });
 
-        // Login Handler
+        // Login Handler (Supports Email OR Username)
         window.handleLogin = async function(event) {
             event.preventDefault();
-            const email = document.forms["loginForm"]["email"].value.trim();
+            const inputIdentifier = document.forms["loginForm"]["identifier"].value.trim();
             const pass = document.forms["loginForm"]["password"].value.trim();
+            let targetEmail = inputIdentifier;
 
             try {
-                const userCredential = await signInWithEmailAndPassword(auth, email, pass);
-                alert("ACCESS GRANTED: Welcome back, " + userCredential.user.email + "!");
+                // If the user typed a username instead of an email, look up their email address in Firestore
+                if (!inputIdentifier.includes("@")) {
+                    const q = query(collection(db, "users"), where("username", "==", inputIdentifier));
+                    const querySnapshot = await getDocs(q);
+                    
+                    if (querySnapshot.empty) {
+                        throw new Error("Username not found!");
+                    }
+                    
+                    querySnapshot.forEach((docSnap) => {
+                        targetEmail = docSnap.data().email;
+                    });
+                }
+
+                const userCredential = await signInWithEmailAndPassword(auth, targetEmail, pass);
+                alert("ACCESS GRANTED: Welcome back!");
                 window.location.href = "home_logged_in.html";
             } catch (err) {
                 alert("ACCESS DENIED: " + err.message);
             }
         };
 
-        // Signup Handler
+        // Signup Handler (Username + Email + Password)
         window.handleRegister = async function(event) {
             event.preventDefault();
+            const username = document.forms["registerForm"]["regUsername"].value.trim();
             const email = document.forms["registerForm"]["regEmail"].value.trim();
             const pass = document.forms["registerForm"]["regPassword"].value.trim();
 
             try {
+                // Check if username is already taken in Firestore
+                const q = query(collection(db, "users"), where("username", "==", username));
+                const existingUsers = await getDocs(q);
+                if (!existingUsers.empty) {
+                    throw new Error("That username is already taken! Pick another one.");
+                }
+
+                // Create auth user in Firebase Auth
                 const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-                alert("ACCOUNT CREATED: You are now a member!");
+                const user = userCredential.user;
+
+                // Save custom username, email, and starting role in Firestore
+                await setDoc(doc(db, "users", user.uid), {
+                    username: username,
+                    email: email,
+                    role: "Member",
+                    status: "ACTIVE",
+                    clout: 0
+                });
+
+                alert("ACCOUNT CREATED: Welcome to the club, " + username + "!");
                 window.location.href = "home_logged_in.html";
             } catch (err) {
                 alert("SIGNUP ERROR: " + err.message);
@@ -78,7 +113,6 @@
         <tr>
             <td width="30%" valign="top" bgcolor="#111111">
                 
-                <!-- LOGIN FORM -->
                 <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
                     <tr>
                         <td align="center" bgcolor="#000080">
@@ -89,8 +123,8 @@
                         <td>
                             <form name="loginForm" onsubmit="handleLogin(event)">
                                 <font face="Courier New" size="2" color="#00FF00">
-                                    EMAIL:<br>
-                                    <input type="email" name="email" size="15" required><br><br>
+                                    USERNAME OR EMAIL:<br>
+                                    <input type="text" name="identifier" size="15" required><br><br>
                                     PASSWORD:<br>
                                     <input type="password" name="password" size="15" required><br><br>
                                     <input type="submit" value="LOGIN">
@@ -102,7 +136,6 @@
 
                 <br><hr color="#FF00FF"><br>
 
-                <!-- REGISTER FORM -->
                 <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
                     <tr>
                         <td align="center" bgcolor="#800000">
@@ -113,6 +146,8 @@
                         <td>
                             <form name="registerForm" onsubmit="handleRegister(event)">
                                 <font face="Courier New" size="2" color="#00FF00">
+                                    USERNAME:<br>
+                                    <input type="text" name="regUsername" size="15" required><br><br>
                                     EMAIL:<br>
                                     <input type="email" name="regEmail" size="15" required><br><br>
                                     PASSWORD:<br>
