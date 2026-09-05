@@ -57,36 +57,39 @@
         };
 
         // Signup Handler
-        window.handleRegister = async function(event) {
-            event.preventDefault();
-            const username = document.forms["registerForm"]["regUsername"].value.trim();
-            const email = document.forms["registerForm"]["regEmail"].value.trim();
-            const pass = document.forms["registerForm"]["regPassword"].value.trim();
+        // Signup Handler
+window.handleRegister = async function(event) {
+    event.preventDefault();
+    const username = document.forms["registerForm"]["regUsername"].value.trim();
+    const email = document.forms["registerForm"]["regEmail"].value.trim();
+    const pass = document.forms["registerForm"]["regPassword"].value.trim();
 
-            const usernameKey = username.toLowerCase();
-            const usernameRef = doc(db, "usernames", usernameKey);
+    const usernameKey = username.toLowerCase();
+    const usernameRef = doc(db, "usernames", usernameKey);
 
-            try {
-                const usernameSnap = await getDoc(usernameRef);
-                if (usernameSnap.exists()) {
-                    throw new Error("That username is already taken!");
-                }
+    try {
+        // 1. Create the Auth account first (authenticates the user)
+        const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
 
-                const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+        // 2. Check if username document exists in Firestore
+        const usernameSnap = await getDoc(usernameRef);
+        if (usernameSnap.exists()) {
+            throw new Error("That username is already taken!");
+        }
 
-                await updateProfile(userCredential.user, { displayName: username });
+        // 3. Update auth display name & save mapping
+        await updateProfile(userCredential.user, { displayName: username });
+        await setDoc(usernameRef, {
+            email: email,
+            uid: userCredential.user.uid
+        });
 
-                await setDoc(usernameRef, {
-                    email: email,
-                    uid: userCredential.user.uid
-                });
-
-                alert("ACCOUNT CREATED: Welcome to the club, " + username + "!");
-                window.location.href = "home_logged_in.html";
-            } catch (err) {
-                alert("SIGNUP ERROR: " + err.message);
-            }
-        };
+        alert("ACCOUNT CREATED: Welcome to the club, " + username + "!");
+        window.location.href = "home_logged_in.html";
+    } catch (err) {
+        alert("SIGNUP ERROR: " + err.message);
+    }
+};
     </script>
 </head>
 <body bgcolor="#000000" text="#00FF00" link="#FF00FF" vlink="#00FFFF" background="https://www.transparenttextures.com/patterns/stardust.png">
