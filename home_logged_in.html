@@ -6,7 +6,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, doc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, doc, deleteDoc, setDoc, onSnapshot, query, orderBy, limit, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyC5RIt66tqj_E7Xj_1UarhaIcGWezIVVVY",
@@ -46,6 +46,8 @@
                 
                 // Re-render feed once auth status is finalized
                 listenToAnnouncements();
+                listenToShoutbox();
+                listenToLeaderboard();
             } else {
                 alert("RESTRICTED AREA: You must be logged in to view this page.");
                 window.location.href = "index.html";
@@ -130,6 +132,94 @@
             });
         }
 
+        // -------------------------------------------------------------
+        // SHOUTBOX REALTIME LOGIC
+        // -------------------------------------------------------------
+        window.postShout = async function(event) {
+            event.preventDefault();
+            const text = document.forms["shoutForm"]["shoutText"].value.trim();
+            const currentUser = auth.currentUser;
+            if (!text) return;
+
+            try {
+                await addDoc(collection(db, "shoutbox"), {
+                    username: currentUser.displayName || currentUser.email,
+                    text: text,
+                    timestamp: serverTimestamp()
+                });
+                document.forms["shoutForm"].reset();
+            } catch (err) {
+                alert("SHOUT ERROR: " + err.message);
+            }
+        };
+
+        function listenToShoutbox() {
+            const shoutQuery = query(collection(db, "shoutbox"), orderBy("timestamp", "desc"), limit(15));
+            onSnapshot(shoutQuery, (snapshot) => {
+                const box = document.getElementById("shoutboxMessages");
+                box.innerHTML = "";
+                if (snapshot.empty) {
+                    box.innerHTML = "<i>No shouts yet. Break the silence!</i>";
+                    return;
+                }
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    const name = data.username || "Anonymous";
+                    box.innerHTML += `<div style="margin-bottom: 6px; border-bottom: 1px dashed #333; padding-bottom: 4px;">
+                        <font color="#FFFF00"><b>${name}:</b></font> <font color="#FFFFFF">${data.text}</font>
+                    </div>`;
+                });
+            });
+        }
+
+        // -------------------------------------------------------------
+        // HEAD CLICKER & LEADERBOARD LOGIC
+        // -------------------------------------------------------------
+        window.clickHead = async function() {
+            const currentUser = auth.currentUser;
+            if (!currentUser) return;
+
+            const userRef = doc(db, "leaderboard", currentUser.uid);
+            const username = currentUser.displayName || currentUser.email;
+
+            // Bounce effect
+            const img = document.getElementById("akennoHead");
+            img.style.transform = "scale(0.85)";
+            setTimeout(() => { img.style.transform = "scale(1)"; }, 100);
+
+            try {
+                await setDoc(userRef, {
+                    username: username,
+                    clicks: increment(1),
+                    lastUpdated: serverTimestamp()
+                }, { merge: true });
+            } catch (err) {
+                console.error("Click error:", err);
+            }
+        };
+
+        function listenToLeaderboard() {
+            const lbQuery = query(collection(db, "leaderboard"), orderBy("clicks", "desc"), limit(10));
+            onSnapshot(lbQuery, (snapshot) => {
+                const lbTable = document.getElementById("leaderboardEntries");
+                lbTable.innerHTML = "";
+                if (snapshot.empty) {
+                    lbTable.innerHTML = "<tr><td colspan='3' align='center'>No head clicks recorded yet!</td></tr>";
+                    return;
+                }
+                let rank = 1;
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    lbTable.innerHTML += `<tr>
+                        <td align="center"><font color="#FF00FF">${rank}</font></td>
+                        <td><font color="#00FFFF">${data.username}</font></td>
+                        <td align="right"><font color="#00FF00">${data.clicks || 0}</font></td>
+                    </tr>`;
+                    rank++;
+                });
+            });
+        }
+
         // Logout Handler
         window.handleLogout = async function() {
             try {
@@ -158,7 +248,6 @@
 
     <table border="5" cellpadding="10" cellspacing="5" width="90%" align="center" bgcolor="#000033">
         <tr>
-            <!-- Sidebar -->
             <td width="30%" valign="top" bgcolor="#111111">
                 <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
                     <tr>
@@ -179,7 +268,6 @@
 
                 <br><hr color="#FF00FF"><br>
 
-                <!-- ADMIN CONTROL PANEL (HIDDEN BY DEFAULT) -->
                 <div id="adminPanel" style="display: none;">
                     <table border="3" bgcolor="#000000" width="100%" cellpadding="5" bordercolor="#FF0000">
                         <tr>
@@ -204,6 +292,28 @@
                     <br><hr color="#FF00FF"><br>
                 </div>
 
+                <table border="3" bgcolor="#000000" width="100%" cellpadding="5" bordercolor="#00FFFF">
+                    <tr>
+                        <td align="center" bgcolor="#008080">
+                            <font color="#FFFFFF" face="Comic Sans MS" size="2"><b>*** CLUB SHOUTBOX ***</b></font>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div id="shoutboxMessages" style="height: 180px; overflow-y: auto; background-color: #050505; border: 1px solid #00FF00; padding: 5px; font-family: 'Courier New', monospace; font-size: 12px;">
+                                <font color="#888">Loading shouts...</font>
+                            </div>
+                            <br>
+                            <form name="shoutForm" onsubmit="postShout(event)">
+                                <input type="text" name="shoutText" placeholder="Type message..." required style="width: 95%; background-color: #111; color: #00FF00; border: 1px solid #00FF00; padding: 3px;"><br><br>
+                                <input type="submit" value="SHOUT!" style="background-color: #00FF00; color: #000; font-weight: bold; cursor: pointer; width: 100%;">
+                            </form>
+                        </td>
+                    </tr>
+                </table>
+
+                <br><hr color="#FF00FF"><br>
+
                 <font face="Times New Roman" color="#FFFFFF">
                     <h3><b><u>MEMBER NAV</u></b></h3>
                     <ul>
@@ -214,12 +324,41 @@
                 </font>
             </td>
 
-            <!-- Main Content Area -->
             <td width="70%" valign="top">
                 <h2><font color="#00FFFF" face="Comic Sans MS" id="welcomeMsg">WELCOME, MEMBER!</font></h2>
                 <hr color="#00FF00">
 
-                <!-- REAL-TIME ANNOUNCEMENT FEED -->
+                <table border="3" bgcolor="#000000" width="100%" cellpadding="8" bordercolor="#FF00FF" style="margin-bottom: 20px;">
+                    <tr>
+                        <td align="center" bgcolor="#800080" colspan="2">
+                            <font color="#FFFF00" face="Comic Sans MS" size="3"><b>*** AKENNO HEAD CLICKER ARENA ***</b></font>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td width="40%" align="center" valign="middle" bgcolor="#050505">
+                            <font color="#00FF00" face="Courier New" size="2"><b>CLICK THE HEAD!</b></font><br><br>
+                            <img id="akennoHead" src="pic4.PNG" onclick="clickHead()" style="width: 120px; height: 120px; border-radius: 50%; border: 3px solid #FF00FF; cursor: pointer; transition: transform 0.1s ease; object-fit: cover;" alt="Akenno's Head">
+                        </td>
+                        <td width="60%" valign="top" bgcolor="#050505">
+                            <font color="#00FFFF" face="Comic Sans MS" size="2"><b>TOP HEAD CLICKERS</b></font>
+                            <table border="1" bordercolor="#333" width="100%" cellpadding="4" style="margin-top: 5px; font-family: 'Courier New', monospace; font-size: 12px;">
+                                <thead>
+                                    <tr bgcolor="#111">
+                                        <th width="15%"><font color="#FF00FF">#</font></th>
+                                        <th align="left"><font color="#00FFFF">USER</font></th>
+                                        <th align="right"><font color="#00FF00">CLICKS</font></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="leaderboardEntries">
+                                    <tr><td colspan="3" align="center">Loading scores...</td></tr>
+                                </tbody>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+
+                <hr color="#00FF00"><br>
+
                 <h2><font color="#FF00FF" face="Comic Sans MS">LIVE CLUB BROADCASTS</font></h2>
                 <div id="announcementFeed">
                     <font color="#FFFFFF">Loading system broadcasts...</font>
