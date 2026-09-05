@@ -6,7 +6,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyC5RIt66tqj_E7Xj_1UarhaIcGWezIVVVY",
@@ -24,7 +24,7 @@
 
         let currentUsername = "";
 
-        // Protect page & load user profile from Firestore
+        // Protect page & look up username from 'usernames' collection via UID
         onAuthStateChanged(auth, async (user) => {
             if (!user) {
                 alert("ACCESS DENIED: Please log in first!");
@@ -33,12 +33,13 @@
             }
 
             try {
-                // Fetch user data directly from the 'users' collection using UID
-                const userDocRef = doc(db, "users", user.uid);
-                const userSnap = await getDoc(userDocRef);
+                // Find document in 'usernames' where uid matches auth.currentUser.uid
+                const q = query(collection(db, "usernames"), where("uid", "==", user.uid));
+                const querySnapshot = await getDocs(q);
 
-                if (userSnap.exists() && userSnap.data().username) {
-                    currentUsername = userSnap.data().username;
+                if (!querySnapshot.empty) {
+                    // Document ID is the actual username (e.g. "admin")
+                    currentUsername = querySnapshot.docs[0].id;
                 } else {
                     currentUsername = user.displayName || "Member";
                 }
@@ -46,10 +47,9 @@
                 document.getElementById("userDisplay").innerText = currentUsername;
                 document.getElementById("memberStatus").innerText = "STATUS: ACTIVE MEMBER";
                 
-                // Initialize real-time list listeners
                 listenToLeaderboardAndRoster();
             } catch (err) {
-                console.error("Error fetching user profile:", err);
+                console.error("Error fetching username:", err);
                 document.getElementById("userDisplay").innerText = user.displayName || "Member";
             }
         });
@@ -65,13 +65,16 @@
             }
         };
 
-        // Realtime Listener for Leaderboard & Roster using direct Firestore data
+        // Realtime Listener for Leaderboard & Roster using 'usernames' collection
         function listenToLeaderboardAndRoster() {
-            const usersRef = collection(db, "users");
-            onSnapshot(usersRef, (snapshot) => {
+            const usernamesRef = collection(db, "usernames");
+            onSnapshot(usernamesRef, (snapshot) => {
                 let members = [];
                 snapshot.forEach((docSnap) => {
-                    members.push({ id: docSnap.id, ...docSnap.data() });
+                    members.push({ 
+                        username: docSnap.id, // Document ID is the username
+                        ...docSnap.data() 
+                    });
                 });
 
                 members.sort((a, b) => (b.clout || 0) - (a.clout || 0));
@@ -80,7 +83,7 @@
                 let lbHtml = "";
                 members.forEach((m, index) => {
                     const rank = "#" + (index + 1);
-                    const name = m.username || "Unknown";
+                    const name = m.username;
                     const userText = m.status === "BANNED" ? "<s>" + name + "</s>" : name;
                     const points = m.clout || 0;
                     const ptColor = points < 0 ? "#FF0000" : "#FFFF00";
@@ -99,7 +102,7 @@
                 // Render Roster
                 let rosHtml = "";
                 members.forEach((mem) => {
-                    const name = mem.username || "Unknown";
+                    const name = mem.username;
                     const status = mem.status || "ACTIVE";
                     const statusColor = status === "ACTIVE" ? "#00FF00" : (status === "BANNED" ? "#FF0000" : "#FFFF00");
 
@@ -132,7 +135,6 @@
 
     <table border="5" cellpadding="10" cellspacing="5" width="90%" align="center" bgcolor="#000033">
         <tr>
-            <!-- Left Control Panel -->
             <td width="30%" valign="top" bgcolor="#111111">
                 <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
                     <tr>
@@ -169,7 +171,6 @@
                 </font>
             </td>
 
-            <!-- Main Dashboard Panel -->
             <td width="70%" valign="top">
                 <h2><font color="#00FFFF" face="Comic Sans MS">Member Dashboard</font></h2>
                 <p>Welcome to the encrypted inner circle.</p>
