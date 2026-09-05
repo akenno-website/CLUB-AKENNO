@@ -1,249 +1,152 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8" />
-<title>Random Garbled Feed (RGF)</title>
-<link rel="stylesheet" href="style.css">
-<script src="lz-string.min.js"></script>
+    <title>*** WELCOME TO CLUB YOU - OFFICIAL SITE ***</title>
+    <script>
+        async function checkLogin(event) {
+            event.preventDefault();
+            var user = document.forms["loginForm"]["username"].value.trim();
+            var pass = document.forms["loginForm"]["password"].value.trim();
+
+            try {
+                // Modern fetch to grab accounts.txt
+                var response = await fetch("accounts.txt");
+                if (!response.ok) throw new Error("Could not load database");
+                
+                var text = await response.text();
+                var lines = text.split("\n");
+                var authenticated = false;
+
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i].trim();
+                    // Skip empty lines or comment lines starting with #
+                    if (line === "" || line.startsWith("#")) continue;
+
+                    var credentials = line.split(":");
+                    var storedUser = credentials[0] ? credentials[0].trim() : "";
+                    var storedPass = credentials[1] ? credentials[1].trim() : "";
+
+                    if (user === storedUser && pass === storedPass) {
+                        authenticated = true;
+                        break;
+                    }
+                }
+
+                if (authenticated) {
+                    sessionStorage.setItem("clubUser", user); // Stores "Leader" or "Subject1"
+                    alert("ACCESS GRANTED: Welcome, " + user + "!");
+                    window.location.href = "home_logged_in.html";
+                } else {
+                    alert("ACCESS DENIED: Credentials not found in accounts.txt!");
+                }
+            } catch (err) {
+                alert("ERROR: Could not read accounts.txt! Make sure you are running a local web server.");
+            }
+        }
+    </script>
 </head>
-<body>
-<header class="site-header">
-  Random Garbled Feed (RGF)
-  <a id="download-source" class="download-btn" href="https://github.com/akenno-website/akenno-website.github.io/archive/refs/heads/main.zip" download="akenno-website.zip">
-    Download Source
-  </a>
-</header>
+<body bgcolor="#000000" text="#00FF00" link="#FF00FF" vlink="#00FFFF" background="https://www.transparenttextures.com/patterns/stardust.png">
 
-<div class="feed" id="feed"></div>
-<div class="loading" id="loading">Loading more noise...</div>
+    <center>
+        <font size="6" face="Comic Sans MS, Arial" color="#FFFF00">
+            <b>WELCOME TO THE OFFICIAL CLUB Akenno HOMEPAGE</b>
+        </font>
+        <br><br>
+        <marquee scrollamount="8" width="80%">
+            <font color="#FF0000"><b>*** LOGIN OR APPLY BELOW *** AUTHORIZED PERSONNEL ONLY ***</b></font>
+        </marquee>
+    </center>
 
-<script>
-const feed = document.getElementById('feed');
-const loading = document.getElementById('loading');
-let mainFeed = [];
+    <hr size="5" color="#FF00FF">
 
-// --- Helpers ---
-function generateGarbledText(length){
-  const chars='          EEEEEeeeeettttaaaaOOOOooooIIIiiiNNnnSSSSssssHHHhhhRRRrrrDDDdddLLLlllCCCcccUUUuuuMMmmWWwwFFffGGggYYyyPPppBbvVKkJjXxQqZz0123456789';
-  let s=''; for(let i=0;i<length;i++){ s+=chars.charAt(Math.floor(Math.random()*chars.length)); } 
-  return s;
-}
+    <table border="5" cellpadding="10" cellspacing="5" width="90%" align="center" bgcolor="#000033">
+        <tr>
+            <td width="30%" valign="top" bgcolor="#111111">
+                
+                <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
+                    <tr>
+                        <td align="center" bgcolor="#000080">
+                            <font color="#FFFFFF" face="Arial" size="2"><b>[ MEMBER LOGIN ]</b></font>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <form name="loginForm" onsubmit="checkLogin(event)">
+                                <font face="Courier New" size="2" color="#00FF00">
+                                    USER ID:<br>
+                                    <input type="text" name="username" size="15"><br><br>
+                                    PASSWORD:<br>
+                                    <input type="password" name="password" size="15"><br><br>
+                                    <input type="submit" value="LOGIN">
+                                </font>
+                            </form>
+                        </td>
+                    </tr>
+                </table>
 
-function createDateString(){
-  const now=new Date();
-  const past=new Date(now.getTime() - Math.random()*30*24*60*60*1000);
-  return past.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-}
+                <br><hr color="#FF00FF"><br>
 
-function showShareOverlay(link) {
-  const overlay = document.createElement('div');
-  overlay.className = 'share-overlay';
-  
-  const box = document.createElement('div');
-  box.className = 'share-box';
-  
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.value = link;
-  input.readOnly = true;
-  input.select();
-  
-  const copyBtn = document.createElement('button');
-  copyBtn.textContent = 'Copy';
-  copyBtn.addEventListener('click', () => {
-    navigator.clipboard.writeText(link);
-    alert('Copied!');
-    overlay.remove();
-  });
-  
-  const closeBtn = document.createElement('button');
-  closeBtn.textContent = '×';
-  closeBtn.addEventListener('click', () => overlay.remove());
-  
-  box.appendChild(input);
-  box.appendChild(copyBtn);
-  box.appendChild(closeBtn);
-  overlay.appendChild(box);
-  document.body.appendChild(overlay);
-}
+                <font face="Times New Roman" color="#FFFFFF">
+                    <h3><b><u>NAVIGATION</u></b></h3>
+                    <ul>
+                        <li><a href="index.html">Home</a></li>
+                        <li><a href="about.html">About Me</a></li>
+                        <li><a href="gallery.html">Gallery</a></li>
+                        <img src="pic1.png" style="max-width: 75%; height: auto;">
+                        <img src="pic2.jpg" style="max-width: 75%; height: auto;">
+                    </ul>
+                    <br>
+                    <center>
+                        <font size="2" color="yellow">BEST VIEWED IN<br>NETSCAPE NAVIGATOR 4.0</font>
+                    </center>
+                </font>
+            </td>
 
-// --- Seeded PRNG ---
-function mulberry32(a){
-  return function(){
-    var t = a += 0x6D2B79F5;
-    t = Math.imul(t ^ t>>>15, t | 1);
-    t ^= t + Math.imul(t ^ t>>>7, t | 61);
-    return ((t ^ t>>>14) >>> 0) / 4294967296;
-  }
-}
+            <td width="70%" valign="top">
+                <h2><font color="#00FFFF" face="Comic Sans MS">Welcome</font></h2>
+                <p>
+                    Hi, welcome to my website. If you want to sign up please do so using the Google Form below.
+                </p>
 
-// Generate noise canvas from seed
-function generateNoiseFromSeed(seed, width=50, height=50){
-  const rand = mulberry32(seed);
-  const canvas = document.createElement('canvas'); canvas.width=width; canvas.height=height;
-  const ctx = canvas.getContext('2d');
-  const imgData = ctx.createImageData(width,height);
-  for(let i=0;i<imgData.data.length;i+=4){
-    imgData.data[i] = rand()*256;
-    imgData.data[i+1] = rand()*256;
-    imgData.data[i+2] = rand()*256;
-    imgData.data[i+3] = 255;
-  }
-  ctx.putImageData(imgData,0,0);
-  return canvas;
-}
+                <hr color="#00FF00">
 
-// --- Encode/decode post data ---
-function encodePostData(data){ 
-    return LZString.compressToEncodedURIComponent(JSON.stringify(data));
-}
+                <br>
+                <h2><font color="yellow">PICTURE</font></h2>
+                
+                <center> <img src="pic3.png" style="max-width: 75%; height: auto;"></center>
+                
+                
+                <h3><font color="#FFFF00">Ready to Apply?</font></h3>
+                <p>Fill out the Google Form below. I will add your account whenever I feel like it.</p>
+                
+                <center>
+                    <a href="https://docs.google.com/forms/d/e/1FAIpQLSe8uk2wVTVPAbmmAkzo7CZ-5h-Mzr2_zzd7C2i6seA_AZExew/viewform?usp=publish-editor" target="_blank">
+                        <font size="5" color="#00FF00"><b>[ CLICK HERE TO SUBMIT YOUR APPLICATION ]</b></font>
+                    </a>
+                </center>
+                
+                <br>
 
-function decodePostData(str){
-    if(!str) return null;
-    // Try LZ-string
-    try {
-        const jsonStr = LZString.decompressFromEncodedURIComponent(str);
-        if(jsonStr) return JSON.parse(jsonStr);
-    } catch(e){ console.warn('LZ-string decode failed', e); }
-    // Fallback to Base64
-    try {
-        return JSON.parse(atob(str));
-    } catch(e){ console.warn('Base64 decode failed', e); }
-    return null;
-}
+                <center><img src="underconstruction.gif"></center>
+            </td>
+        </tr>
+    </table>
 
-// --- Replies ---
-function createReplyElement(reply){
-  const r = document.createElement('div'); r.className='reply';
-  const u = document.createElement('span'); u.className='reply-username';
-  u.textContent = reply.username;
-  const t = document.createElement('span'); t.className='reply-text';
-  t.textContent = reply.text;
-  r.appendChild(u); r.appendChild(t); 
-  return r;
-}
+    <br><br>
 
-// --- Post element ---
-function createPostElement(postData){
-  const post = document.createElement('div'); post.className='post';
+    <center>
+        <hr size="3" color="#FF00FF" width="50%">
+        <font color="#FFFFFF" size="2">
+            VISITOR COUNTER:<br>
+            <table border="1" bgcolor="#000000" cellpadding="3">
+                <tr>
+                    <td><font color="#00FF00" face="Courier"><b>000001</b></font></td>
+                </tr>
+            </table>
+            <br>
+            <i>Copyright &copy; 2026 Club Akenno. All Rights Reserved.</i>
+        </font>
+    </center>
 
-  // Header
-  const header = document.createElement('div'); header.className='post-header';
-  let usernameStr = postData.username;
-  if(postData.isSponsored){
-    const suffixes=['Corp.','Inc.','Group','LLC.','Ltd.','PLC','Co.'];
-    usernameStr += ' '+suffixes[Math.floor(Math.random()*suffixes.length)];
-  }
-  const pfp = document.createElement('div'); pfp.className='pfp'; pfp.textContent=usernameStr.charAt(0).toUpperCase();
-  const username = document.createElement('div'); username.className='username'; username.textContent=usernameStr;
-  if(postData.isSponsored) username.style.color='#FFD700';
-  const date = document.createElement('div'); date.className='date'; date.textContent=postData.date;
-  header.appendChild(pfp); header.appendChild(username); header.appendChild(date);
-
-  // Caption
-  const caption = document.createElement('div'); caption.className='caption'; caption.textContent=postData.caption;
-
-  // Image
-  const imageContainer = document.createElement('div'); imageContainer.className='image-container';
-  const canvas = generateNoiseFromSeed(postData.seed,50,50);
-  imageContainer.appendChild(canvas);
-
-  // Like bar
-  const likeBar = document.createElement('div'); likeBar.className='like-bar';
-  const heart = document.createElement('span'); heart.className='heart'; heart.textContent='♥';
-  const likesCount = document.createElement('span'); likesCount.className='likes-count';
-  let count = postData.likes; likesCount.textContent = count;
-  likeBar.appendChild(heart); likeBar.appendChild(likesCount);
-  let liked=false;
-  likeBar.addEventListener('click',(e)=>{ e.stopPropagation(); liked=!liked; heart.classList.toggle('liked',liked); count+=liked?1:-1; likesCount.textContent=count; });
-
-  // Replies
-  const repliesContainer = document.createElement('div'); repliesContainer.className='replies';
-  postData.replies.forEach(reply => repliesContainer.appendChild(createReplyElement(reply)));
-
-  // Comments toggle
-  const commentsToggle = document.createElement('button'); commentsToggle.className='comments-toggle';
-  const repliesCount = postData.replies.length;
-  commentsToggle.textContent=`Show Replies (${repliesCount})`;
-  commentsToggle.addEventListener('click',(e)=>{ e.stopPropagation(); const visible = repliesContainer.classList.toggle('visible'); commentsToggle.textContent = visible?`Hide Replies (${repliesCount})`:`Show Replies (${repliesCount})`; });
-
-  // Share button
-  const shareBtn = document.createElement('button'); shareBtn.className='share-btn'; shareBtn.textContent='Share';
-  shareBtn.addEventListener('click',(e)=>{
-    e.stopPropagation();
-    const link = `${location.origin}${location.pathname}?id=${encodePostData(postData)}`;
-    showShareOverlay(link);
-    });
-
-  post.appendChild(header); post.appendChild(caption); post.appendChild(imageContainer);
-  post.appendChild(likeBar); post.appendChild(commentsToggle); post.appendChild(repliesContainer); post.appendChild(shareBtn);
-
-  post.addEventListener('click',()=>openPostPage(postData));
-  return post;
-}
-
-// --- Generate new post ---
-function generateRandomPost(){
-  return {
-    username: generateGarbledText(7),
-    caption: generateGarbledText(40),
-    date: createDateString(),
-    replies: Array.from({length: Math.floor(Math.random()*12)+1}, () => ({
-        username: generateGarbledText(5),
-        text: generateGarbledText(Math.floor(Math.random()*8)+8)
-    })),
-    likes: Math.floor(Math.random()*500),
-    isSponsored: Math.random()<0.1,
-    seed: Math.floor(Math.random()*1e9)
-  };
-}
-
-// --- Open single post page ---
-function openPostPage(postData){
-  feed.style.display = 'none';
-  loading.style.display = 'none';
-
-  const postPage = document.createElement('div'); postPage.className = 'post-page'; postPage.id = 'single-post-page';
-
-  const backBtn = document.createElement('button'); backBtn.className = 'back-btn'; backBtn.textContent='← Back to feed';
-  backBtn.addEventListener('click',()=>{
-    postPage.remove();
-    feed.style.display = '';
-    loading.style.display = '';
-    history.replaceState({}, '', location.pathname);
-  });
-
-  postPage.appendChild(backBtn);
-  postPage.appendChild(createPostElement(postData));
-  document.body.appendChild(postPage);
-
-  history.replaceState({}, '', `${location.pathname}?id=${encodePostData(postData)}`);
-}
-
-// --- Load posts ---
-function loadPosts(count=10){
-  for(let i=0;i<count;i++){
-    const postData = generateRandomPost();
-    mainFeed.push(postData);
-    feed.appendChild(createPostElement(postData));
-  }
-}
-
-// Infinite scroll
-const observer = new IntersectionObserver(entries=>{ entries.forEach(e=>{ if(e.isIntersecting) loadPosts(10); }); });
-observer.observe(loading);
-
-// Check URL for shared post
-window.addEventListener('load',()=>{
-  const params = new URLSearchParams(location.search);
-  const id = params.get('id');
-  if(id){
-    const postData = decodePostData(id);
-    if(postData) openPostPage(postData);
-    else loadPosts(20); // fallback
-  } else loadPosts(20);
-});
-</script>
 </body>
 </html>
-
