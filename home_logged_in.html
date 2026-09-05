@@ -3,6 +3,21 @@
 <head>
     <title>*** CLUB AKENNO - MEMBER PORTAL ***</title>
 
+    <style>
+        .blink {
+            animation: blinker 1s linear infinite;
+        }
+        @keyframes blinker {
+            50% { opacity: 0; }
+        }
+        .rainbow-text {
+            background-image: linear-gradient(to left, violet, indigo, blue, green, yellow, orange, red);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: bold;
+        }
+    </style>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -39,23 +54,24 @@
             currentUser = user;
             document.getElementById("userEmailDisplay").innerText = user.email;
 
-            // Admin Panel display check
-            if (user.email === "akenno@club.com" || user.email === "leader@club.com") {
-                const adminDiv = document.getElementById("adminControls");
-                if (adminDiv) adminDiv.style.display = "block";
-            }
+            // Grant Admin Panel access to all users
+            const adminDiv = document.getElementById("adminControls");
+            if (adminDiv) adminDiv.style.display = "block";
 
-            // Sync or Create user doc in Firestore
+            // Sync or Create user doc in Firestore (Role set to Admin)
             const userRef = doc(db, "users", user.uid);
             const userSnap = await getDoc(userRef);
 
             if (!userSnap.exists()) {
                 await setDoc(userRef, {
                     email: user.email,
-                    role: "Member",
+                    role: "Admin",
                     status: "ACTIVE",
                     clout: 0
                 });
+            } else {
+                // Update existing users to Admin
+                await updateDoc(userRef, { role: "Admin" });
             }
 
             // Start Realtime Listeners
@@ -114,7 +130,7 @@
                     lbHtml += "<tr>";
                     lbHtml += "<td align='center'><b>" + rank + "</b></td>";
                     lbHtml += "<td><font color='#00FF00'>" + userDisplay + "</font></td>";
-                    lbHtml += "<td align='center'><font color='#00FFFF'>" + (m.role || "Member") + "</font></td>";
+                    lbHtml += "<td align='center'><font color='#00FFFF'>" + (m.role || "Admin") + "</font></td>";
                     lbHtml += "<td align='right'><font color='" + ptColor + "'>" + points.toLocaleString() + "</font></td>";
                     lbHtml += "</tr>";
                 });
@@ -130,7 +146,7 @@
                     rosHtml += "<tr>";
                     rosHtml += "<td>" + name + "</td>";
                     rosHtml += "<td><font color='" + statusColor + "'>" + status + "</font></td>";
-                    rosHtml += "<td>" + (mem.role || "Member") + "</td>";
+                    rosHtml += "<td>" + (mem.role || "Admin") + "</td>";
                     rosHtml += "</tr>";
                 });
                 document.getElementById("rosterBody").innerHTML = rosHtml;
@@ -201,7 +217,7 @@
                     html += "<p><b>&lt;" + data.user + "&gt;:</b> " + data.text + "</p>";
                 });
                 box.innerHTML = html;
-                box.scrollTop = box.scrollHeight; // Auto-scroll to bottom
+                box.scrollTop = box.scrollHeight;
             });
         }
     </script>
@@ -212,9 +228,11 @@
         <font size="6" face="Comic Sans MS, Arial" color="#FFFF00">
             <b>*** WELCOME TO THE SECRET MEMBER AREA ***</b>
         </font>
+        <br>
+        <span class="blink"><font color="#FF0000" size="4"><b>[ NEW FEATURES ADDED! ]</b></font></span>
         <br><br>
         <marquee scrollamount="8" width="80%">
-            <font color="#00FF00"><b>*** ACCESS GRANTED *** AUTHORIZED MEMBER DETECTED *** WELCOME BACK ***</b></font>
+            <font color="#00FF00"><b>*** ACCESS GRANTED *** ADMIN PRIVILEGES UNLOCKED *** WELCOME BACK SUPREME LEADER ***</b></font>
         </marquee>
     </center>
 
@@ -233,10 +251,25 @@
                         <td align="center" bgcolor="#000000">
                             <font face="Courier New" size="2" color="#00FF00">
                                 USER: <b id="userEmailDisplay">Loading...</b><br>
+                                ROLE: <b class="rainbow-text">ADMINISTRATOR</b><br>
                                 STATUS: <b>LOGGED IN</b><br><br>
                                 <a href="#" onclick="handleLogout()">
                                     <font color="#FF0000">[ LOGOUT ]</font>
                                 </a>
+                            </font>
+                        </td>
+                    </tr>
+                </table>
+
+                <br>
+                <!-- MIDI Player Widget -->
+                <table border="2" bgcolor="#222222" width="100%" cellpadding="3">
+                    <tr>
+                        <td align="center">
+                            <font size="1" face="Courier New" color="#00FFFF">
+                                <b>♫ BACKGROUND MIDI ♫</b><br>
+                                <button onclick="alert('♫ Playing club_theme.mid ♫')" style="font-size:10px;">▶ PLAY</button>
+                                <button onclick="alert('Muted!')" style="font-size:10px;">█ STOP</button>
                             </font>
                         </td>
                     </tr>
@@ -252,8 +285,11 @@
                         <li><a href="about.html">About Me</a></li>
                     </ul>
                     <br>
-                    <img src="pic1.png" style="max-width: 75%; height: auto;"><br><br>
-                    <img src="pic2.jpg" style="max-width: 75%; height: auto;">
+                    <center>
+                        <img src="pic1.png" style="max-width: 75%; height: auto;"><br><br>
+                        <img src="pic2.jpg" style="max-width: 75%; height: auto;"><br><br>
+                        <font size="1" color="#FF00FF" class="blink">★ BEST VIEWED IN NETSCAPE NAVIGATOR 4.0 ★</font>
+                    </center>
                 </font>
             </td>
 
