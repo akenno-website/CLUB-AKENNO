@@ -1,3 +1,4 @@
 # CLUB AKENNO ACCOUNTS
 Akenno:1234:Leader:ACTIVE
 guest:guest:guest:ACTIVE
+harviecutiepie:daddyakenno:Member:ACTIVE
