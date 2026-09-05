@@ -1,48 +1,62 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>*** WELCOME TO CLUB AKENNO - OFFICIAL SITE ***</title>
-    <script>
-        async function checkLogin(event) {
+    <title>*** WELCOME TO CLUB YOU - OFFICIAL SITE ***</title>
+    
+    <!-- Firebase Modular SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        // REPLACE THESE WITH YOUR FIREBASE PROJECT CONFIG
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        // Keep track of auth state
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                console.log("Logged in as:", user.email);
+            }
+        });
+
+        // Login Handler
+        window.handleLogin = async function(event) {
             event.preventDefault();
-            var user = document.forms["loginForm"]["username"].value.trim();
-            var pass = document.forms["loginForm"]["password"].value.trim();
+            const email = document.forms["loginForm"]["email"].value.trim();
+            const pass = document.forms["loginForm"]["password"].value.trim();
 
             try {
-                // Modern fetch to grab accounts.txt
-                var response = await fetch("accounts.txt");
-                if (!response.ok) throw new Error("Could not load database");
-                
-                var text = await response.text();
-                var lines = text.split("\n");
-                var authenticated = false;
-
-                for (var i = 0; i < lines.length; i++) {
-                    var line = lines[i].trim();
-                    // Skip empty lines or comment lines starting with #
-                    if (line === "" || line.startsWith("#")) continue;
-
-                    var credentials = line.split(":");
-                    var storedUser = credentials[0] ? credentials[0].trim() : "";
-                    var storedPass = credentials[1] ? credentials[1].trim() : "";
-
-                    if (user === storedUser && pass === storedPass) {
-                        authenticated = true;
-                        break;
-                    }
-                }
-
-                if (authenticated) {
-                    sessionStorage.setItem("clubUser", user); // Stores "Leader" or "Subject1"
-                    alert("ACCESS GRANTED: Welcome, " + user + "!");
-                    window.location.href = "home_logged_in.html";
-                } else {
-                    alert("ACCESS DENIED: Credentials not found in accounts.txt!");
-                }
+                const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+                alert("ACCESS GRANTED: Welcome back, " + userCredential.user.email + "!");
+                window.location.href = "home_logged_in.html";
             } catch (err) {
-                alert("ERROR: Could not read accounts.txt! Make sure you are running a local web server.");
+                alert("ACCESS DENIED: " + err.message);
             }
-        }
+        };
+
+        // Signup Handler
+        window.handleRegister = async function(event) {
+            event.preventDefault();
+            const email = document.forms["registerForm"]["regEmail"].value.trim();
+            const pass = document.forms["registerForm"]["regPassword"].value.trim();
+
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+                alert("ACCOUNT CREATED: You are now a member!");
+                window.location.href = "home_logged_in.html";
+            } catch (err) {
+                alert("SIGNUP ERROR: " + err.message);
+            }
+        };
     </script>
 </head>
 <body bgcolor="#000000" text="#00FF00" link="#FF00FF" vlink="#00FFFF" background="https://www.transparenttextures.com/patterns/stardust.png">
@@ -53,7 +67,7 @@
         </font>
         <br><br>
         <marquee scrollamount="8" width="80%">
-            <font color="#FF0000"><b>*** LOGIN OR APPLY BELOW *** AUTHORIZED PERSONNEL ONLY ***</b></font>
+            <font color="#FF0000"><b>*** LOGIN OR REGISTER BELOW *** AUTHORIZED PERSONNEL ONLY ***</b></font>
         </marquee>
     </center>
 
@@ -63,6 +77,7 @@
         <tr>
             <td width="30%" valign="top" bgcolor="#111111">
                 
+                <!-- LOGIN FORM -->
                 <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
                     <tr>
                         <td align="center" bgcolor="#000080">
@@ -71,13 +86,37 @@
                     </tr>
                     <tr>
                         <td>
-                            <form name="loginForm" onsubmit="checkLogin(event)">
+                            <form name="loginForm" onsubmit="handleLogin(event)">
                                 <font face="Courier New" size="2" color="#00FF00">
-                                    USER ID:<br>
-                                    <input type="text" name="username" size="15"><br><br>
+                                    EMAIL:<br>
+                                    <input type="email" name="email" size="15" required><br><br>
                                     PASSWORD:<br>
-                                    <input type="password" name="password" size="15"><br><br>
+                                    <input type="password" name="password" size="15" required><br><br>
                                     <input type="submit" value="LOGIN">
+                                </font>
+                            </form>
+                        </td>
+                    </tr>
+                </table>
+
+                <br><hr color="#FF00FF"><br>
+
+                <!-- REGISTER FORM -->
+                <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
+                    <tr>
+                        <td align="center" bgcolor="#800000">
+                            <font color="#FFFFFF" face="Arial" size="2"><b>[ NEW MEMBER SIGNUP ]</b></font>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <form name="registerForm" onsubmit="handleRegister(event)">
+                                <font face="Courier New" size="2" color="#00FF00">
+                                    EMAIL:<br>
+                                    <input type="email" name="regEmail" size="15" required><br><br>
+                                    PASSWORD:<br>
+                                    <input type="password" name="regPassword" size="15" required><br><br>
+                                    <input type="submit" value="REGISTER">
                                 </font>
                             </form>
                         </td>
@@ -105,7 +144,7 @@
             <td width="70%" valign="top">
                 <h2><font color="#00FFFF" face="Comic Sans MS">Welcome</font></h2>
                 <p>
-                    Hi, welcome to my website. If you want to sign up please do so using the Google Form below.
+                    Hi, welcome to my website. Sign up on the left to get instant access!
                 </p>
 
                 <hr color="#00FF00">
@@ -113,17 +152,7 @@
                 <br>
                 <h2><font color="yellow">PICTURE</font></h2>
                 
-                <center> <img src="pic3.png" style="max-width: 75%; height: auto;"></center>
-                
-                
-                <h3><font color="#FFFF00">Ready to Apply?</font></h3>
-                <p>Fill out the Google Form below. I will add your account whenever I feel like it.</p>
-                
-                <center>
-                    <a href="https://docs.google.com/forms/d/e/1FAIpQLSe8uk2wVTVPAbmmAkzo7CZ-5h-Mzr2_zzd7C2i6seA_AZExew/viewform?usp=publish-editor" target="_blank">
-                        <font size="5" color="#00FF00"><b>[ CLICK HERE TO SUBMIT YOUR APPLICATION ]</b></font>
-                    </a>
-                </center>
+                <center><img src="pic3.png" style="max-width: 75%; height: auto;"></center>
                 
                 <br>
 
