@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>*** CLUB AKENNO - MEMBER PORTAL ***</title>
+    <script>
+        function initAdminPanel() {
+            var currentUser = sessionStorage.getItem("clubUser");
+            
+            // Show admin controls if logged in as Akenno or Leader
+            if (currentUser === "Akenno" || currentUser === "Leader") {
+                var adminDiv = document.getElementById("adminControls");
+                if (adminDiv) adminDiv.style.display = "block";
+            }
+            
+            loadAnnouncements();
+            loadShouts();
+            loadClout();
+            loadDynamicLeaderboard(); // Automatically parses accounts.txt
+        }
+
+        // --- DYNAMIC LEADERBOARD & CLOUT LOGIC ---
+        async function loadDynamicLeaderboard() {
+            var boardBody = document.getElementById("leaderboardBody");
+            var rosterBody = document.getElementById("rosterBody");
+
+            try {
+                var response = await fetch("accounts.txt");
+                if (!response.ok) throw new Error("Database error");
+                var text = await response.text();
+                var lines = text.split("\n");
+
+                var members = [];
+
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i].trim();
+                    if (line === "" || line.startsWith("#")) continue;
+
+                    var parts = line.split(":");
+                    var user = parts[0] ? parts[0].trim() : "Unknown";
+                    var role = parts[2] ? parts[2].trim() : "Member";
+                    var status = parts[3] ? parts[3].trim() : "ACTIVE";
+
+                    // Base points from role
+                    var basePoints = 100;
+                    if (user === "Leader" || user === "Akenno") basePoints = 999999;
+                    else if (role.includes("VIP")) basePoints = 4200;
+                    else if (role.includes("Junior")) basePoints = 1337;
+                    else if (status === "BANNED") basePoints = -9999;
+
+                    // Grab extra clicked clout from localStorage for this specific user
+                    var clickedClout = parseInt(localStorage.getItem("clout_" + user) || "0", 10);
+                    
+                    // Total Clout = Base Points + Clicked Clout
+                    var totalPoints = basePoints + clickedClout;
+
+                    members.push({ user: user, role: role, status: status, points: totalPoints });
+                }
+
+                // Sort members by highest total points
+                members.sort(function(a, b) { return b.points - a.points; });
+
+                // Render Dynamic Leaderboard
+                var lbHtml = "";
+                for (var j = 0; j < members.length; j++) {
+                    var m = members[j];
+                    var rank = "#" + (j + 1);
+                    var userDisplay = m.status === "BANNED" ? "<s>" + m.user + "</s>" : m.user;
+                    var ptColor = m.points < 0 ? "#FF0000" : "#FFFF00";
+
+                    lbHtml += "<tr>";
+                    lbHtml += "<td align='center'><b>" + rank + "</b></td>";
+                    lbHtml += "<td><font color='#00FF00'>" + userDisplay + "</font></td>";
+                    lbHtml += "<td align='center'><font color='#00FFFF'>" + m.role + "</font></td>";
+                    lbHtml += "<td align='right'><font color='" + ptColor + "'>" + m.points.toLocaleString() + "</font></td>";
+                    lbHtml += "</tr>";
+                }
+                boardBody.innerHTML = lbHtml;
+
+                // Render Dynamic Roster
+                var rosHtml = "";
+                for (var k = 0; k < members.length; k++) {
+                    var mem = members[k];
+                    var statusColor = mem.status === "ACTIVE" ? "#00FF00" : (mem.status === "BANNED" ? "#FF0000" : "#FFFF00");
+
+                    rosHtml += "<tr>";
+                    rosHtml += "<td>" + mem.user + "</td>";
+                    rosHtml += "<td><font color='" + statusColor + "'>" + mem.status + "</font></td>";
+                    rosHtml += "<td>" + mem.role + "</td>";
+                    rosHtml += "</tr>";
+                }
+                rosterBody.innerHTML = rosHtml;
+
+            } catch (err) {
+                boardBody.innerHTML = "<tr><td colspan='4'><font color='red'>Failed to read accounts.txt</font></td></tr>";
+            }
+        }
+
+        function loadClout() {
+            var user = sessionStorage.getItem("clubUser") || "Guest";
+            var userCloutKey = "clout_" + user;
+            var currentClout = parseInt(localStorage.getItem(userCloutKey) || "0", 10);
+            
+            document.getElementById("myCloutDisplay").innerText = currentClout.toLocaleString();
+        }
+
+        function addClout() {
+            var user = sessionStorage.getItem("clubUser") || "Guest";
+            var userCloutKey = "clout_" + user;
+            var currentClout = parseInt(localStorage.getItem(userCloutKey) || "0", 10);
+            
+            currentClout += 1;
+            localStorage.setItem(userCloutKey, currentClout);
+            
+            document.getElementById("myCloutDisplay").innerText = currentClout.toLocaleString();
+            
+            // Refresh leaderboard instantly
+            loadDynamicLeaderboard();
+        }
+
+        // --- ANNOUNCEMENTS LOGIC ---
+        function postAnnouncement(e) {
+            e.preventDefault();
+            var msgInput = document.getElementById("adminMsg");
+            var msgText = msgInput.value.trim();
+            if (msgText === "") return;
+
+            var existing = JSON.parse(localStorage.getItem("clubAnnouncements") || "[]");
+            existing.unshift({
+                author: sessionStorage.getItem("clubUser") || "Leader",
+                text: msgText,
+                date: new Date().toLocaleTimeString()
+            });
+            localStorage.setItem("clubAnnouncements", JSON.stringify(existing));
+            
+            msgInput.value = "";
+            loadAnnouncements();
+        }
+
+        function loadAnnouncements() {
+            var display = document.getElementById("announcementDisplay");
+            var posts = JSON.parse(localStorage.getItem("clubAnnouncements") || "[]");
+            if (posts.length === 0) {
+                display.innerHTML = "<i>No announcements posted yet.</i>";
+                return;
+            }
+            var html = "";
+            for (var i = 0; i < posts.length; i++) {
+                html += "<p><b>[" + posts[i].author + " @ " + posts[i].date + "]:</b> " + posts[i].text + "</p><hr color='#00FF00' size='1'>";
+            }
+            display.innerHTML = html;
+        }
+
+        function clearAnnouncements() {
+            if (confirm("Delete all broadcast messages?")) {
+                localStorage.removeItem("clubAnnouncements");
+                loadAnnouncements();
+            }
+        }
+
+        // --- SHOUTBOX LOGIC ---
+        function postShout(e) {
+            e.preventDefault();
+            var input = document.getElementById("shoutInput");
+            var msg = input.value.trim();
+            if (!msg) return;
+
+            var user = sessionStorage.getItem("clubUser") || "Guest";
+            var shouts = JSON.parse(localStorage.getItem("clubShouts") || "[]");
+            shouts.push({ user: user, text: msg });
+            localStorage.setItem("clubShouts", JSON.stringify(shouts));
+            input.value = "";
+            loadShouts();
+        }
+
+        function loadShouts() {
+            var box = document.getElementById("shoutbox");
+            var shouts = JSON.parse(localStorage.getItem("clubShouts") || "[]");
+            var html = "";
+            for (var i = 0; i < shouts.length; i++) {
+                html += "<p><b>&lt;" + shouts[i].user + "&gt;:</b> " + shouts[i].text + "</p>";
+            }
+            box.innerHTML = html || "<i>No shouts yet. Talk trash below.</i>";
+        }
+    </script>
+</head>
+<body bgcolor="#000000" text="#00FF00" link="#FF00FF" vlink="#00FFFF" background="https://www.transparenttextures.com/patterns/stardust.png" onload="initAdminPanel()">
+
+    <center>
+        <font size="6" face="Comic Sans MS, Arial" color="#FFFF00">
+            <b>*** WELCOME TO THE SECRET MEMBER AREA ***</b>
+        </font>
+        <br><br>
+        <marquee scrollamount="8" width="80%">
+            <font color="#00FF00"><b>*** ACCESS GRANTED *** AUTHORIZED MEMBER DETECTED *** WELCOME BACK ***</b></font>
+        </marquee>
+    </center>
+
+    <hr size="5" color="#FF00FF">
+
+    <table border="5" cellpadding="10" cellspacing="5" width="90%" align="center" bgcolor="#000033">
+        <tr>
+            <!-- SIDEBAR -->
+            <td width="30%" valign="top" bgcolor="#111111">
+                <table border="2" bgcolor="#000080" width="100%" cellpadding="5">
+                    <tr>
+                        <td align="center">
+                            <font color="#FFFFFF" face="Arial" size="2"><b>[ USER STATUS ]</b></font>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center" bgcolor="#000000">
+                            <font face="Courier New" size="2" color="#00FF00">
+                                STATUS: <b>LOGGED IN</b><br><br>
+                                <a href="index.html" onclick="sessionStorage.clear()">
+                                    <font color="#FF0000">[ LOGOUT ]</font>
+                                </a>
+                            </font>
+                        </td>
+                    </tr>
+                </table>
+
+                <br><hr color="#FF00FF"><br>
+
+                <font face="Times New Roman" color="#FFFFFF">
+                    <h3><b><u>VIP NAVIGATION</u></b></h3>
+                    <ul>
+                        <li><a href="home_logged_in.html">Member Home</a></li>
+                        <li><a href="gallery.html?access=pro">Media Gallery</a></li>
+                        <li><a href="about.html">About Me</a></li>
+                    </ul>
+                    <br>
+                    <img src="pic1.png" style="max-width: 75%; height: auto;"><br><br>
+                    <img src="pic2.jpg" style="max-width: 75%; height: auto;">
+                </font>
+            </td>
+
+            <!-- MAIN CONTENT -->
+            <td width="70%" valign="top">
+                <h2><font color="#00FFFF" face="Comic Sans MS">Member Dashboard</font></h2>
+
+                <!-- SECRET LEADER ADMIN PANEL -->
+                <div id="adminControls" style="display:none;">
+                    <table border="2" bordercolor="#FF0000" bgcolor="#220000" width="100%" cellpadding="8">
+                        <tr>
+                            <td>
+                                <font color="#FF0000" face="Courier New">
+                                    <b>[ SUPREME LEADER COMMAND CONSOLE ]</b>
+                                </font>
+                                <br><br>
+                                <form onsubmit="postAnnouncement(event)">
+                                    Broadcast Announcement:<br>
+                                    <input type="text" id="adminMsg" size="30" placeholder="Type stuff to broadcast...">
+                                    <input type="submit" value="BROADCAST">
+                                    <button type="button" onclick="clearAnnouncements()">CLEAR ALL</button>
+                                </form>
+                            </td>
+                        </tr>
+                    </table>
+                    <br>
+                </div>
+
+                <!-- ANNOUNCEMENTS SECTION -->
+                <h3><font color="#FFFF00">Club Announcements</font></h3>
+                <div id="announcementDisplay" style="background:#000; padding:10px; border:1px solid #00FF00;"></div>
+
+                <hr color="#00FF00">
+                
+                <!-- CLOUT CLICKER SECTION -->
+                <center>
+                    <table border="4" bordercolor="#FFFF00" bgcolor="#000000" cellpadding="10" width="80%">
+                        <tr>
+                            <td align="center">
+                                <font color="#FF00FF" size="5" face="Comic Sans MS">
+                                    <b>*** CLOUT CLICKER 2000 ***</b>
+                                </font>
+                                <br>
+                                <font color="#00FFFF" size="2">
+                                    CLICK THE BUTTON TO FARM UNLIMITED CLOUT
+                                </font>
+                                <br><br>
+
+                                <font size="6" color="#00FF00" face="Courier New">
+                                    YOUR CLOUT: <span id="myCloutDisplay">0</span>
+                                </font>
+                                <br><br>
+
+                                <button onclick="addClout()" style="font-size:20px; background-color:#FF00FF; color:#FFFF00; border:3px outset #FFFFFF; cursor:pointer;">
+                                    <b>[ +1 CLOUT ]</b>
+                                </button>
+                            </td>
+                        </tr>
+                    </table>
+                </center>
+
+                <br>
+                <hr color="#00FF00">
+
+                <!-- DYNAMIC LEADERBOARD -->
+                <h3><font color="#FF00FF">Official Club Leaderboard (Parsed from accounts.txt)</font></h3>
+                <table border="3" cellpadding="5" cellspacing="2" width="100%" bgcolor="#000000" bordercolor="#FF00FF">
+                    <thead>
+                        <tr bgcolor="#000080">
+                            <th align="center"><font color="#FFFFFF">RANK</font></th>
+                            <th align="left"><font color="#FFFFFF">MEMBER</font></th>
+                            <th align="center"><font color="#FFFFFF">TITLE</font></th>
+                            <th align="right"><font color="#FFFFFF">CLOUT POINTS</font></th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboardBody">
+                        <!-- Dynamically filled from accounts.txt -->
+                    </tbody>
+                </table>
+
+                <hr color="#00FF00">
+
+                <!-- DYNAMIC MEMBER ROSTER -->
+                <h3><font color="#00FFFF">Active Member Roster</font></h3>
+                <table border="1" cellpadding="4" width="100%" bgcolor="#000000">
+                    <thead>
+                        <tr bgcolor="#111111">
+                            <td><b>USERNAME</b></td>
+                            <td><b>STATUS</b></td>
+                            <td><b>ROLE</b></td>
+                        </tr>
+                    </thead>
+                    <tbody id="rosterBody">
+                        <!-- Dynamically filled from accounts.txt -->
+                    </tbody>
+                </table>
+
+                <hr color="#00FF00">
+
+                <!-- SHOUTBOX -->
+                <h3><font color="#FFFF00">Club Shoutbox</font></h3>
+                <div id="shoutbox" style="background:#000; height:100px; overflow-y:scroll; border:1px solid #00FF00; padding:5px;"></div>
+                <br>
+                <form onsubmit="postShout(event)">
+                    <input type="text" id="shoutInput" placeholder="Type a shout..." size="30">
+                    <input type="submit" value="SHOUT!">
+                </form>
+            </td>
+        </tr>
+    </table>
+
+    <br><br>
+
+    <center>
+        <hr size="3" color="#FF00FF" width="50%">
+        <font color="#FFFFFF" size="2">
+            VISITOR COUNTER:<br>
+            <table border="1" bgcolor="#000000" cellpadding="3">
+                <tr>
+                    <td><font color="#00FF00" face="Courier"><b>000042</b></font></td>
+                </tr>
+            </table>
+            <br>
+            <i>Copyright &copy; 2026 Club Akenno. All Rights Reserved.</i>
+        </font>
+    </center>
+
+</body>
+</html>
