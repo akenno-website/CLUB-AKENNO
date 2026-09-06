@@ -6,7 +6,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, doc, deleteDoc, setDoc, onSnapshot, query, orderBy, limit, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, doc, deleteDoc, setDoc, onSnapshot, query, orderBy, limit, serverTimestamp, increment, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyC5RIt66tqj_E7Xj_1UarhaIcGWezIVVVY",
@@ -131,17 +131,19 @@
             }
         };
 
-        // One click = +1 to that emoji's count. Not tracking per-user
-        // which emoji they already picked, so people can spam a reaction
-        // repeatedly — same trust model as the shoutbox. If you want
-        // "one reaction per user" later, store it on a
-        // reactions/{docId}_{uid} doc instead of a bare counter.
-        window.reactToAnnouncement = async function (docId, emoji) {
+        // One reaction per emoji per user. Reactions store WHO reacted
+        // (uid arrays) rather than a bare counter, so clicking toggles
+        // your reaction on/off instead of letting you spam +1 forever.
+        window.reactToAnnouncement = async function (docId, emoji, alreadyReacted) {
             const currentUser = auth.currentUser;
             if (!currentUser) return;
             try {
                 await setDoc(doc(db, "announcements", docId), {
-                    reactions: { [emoji]: increment(1) }
+                    reactions: {
+                        [emoji]: alreadyReacted
+                            ? arrayRemove(currentUser.uid)
+                            : arrayUnion(currentUser.uid)
+                    }
                 }, { merge: true });
             } catch (err) {
                 console.error("Reaction error:", err);
@@ -204,9 +206,14 @@
                     }
 
                     card += `<div style="margin-top: 8px;">`;
+                    const currentUid = auth.currentUser ? auth.currentUser.uid : null;
                     REACTION_EMOJIS.forEach((emoji) => {
-                        const count = reactions[emoji] || 0;
-                        card += `<button onclick="reactToAnnouncement('${docId}', '${emoji}')" style="background-color: #111; color: #FFF; border: 1px solid #555; margin-right: 6px; cursor: pointer; font-size: 14px; padding: 2px 8px;">${emoji} <span style="color:#0FF">${count}</span></button>`;
+                        const uids = Array.isArray(reactions[emoji]) ? reactions[emoji] : [];
+                        const count = uids.length;
+                        const reacted = currentUid && uids.includes(currentUid);
+                        const bg = reacted ? "#440066" : "#111";
+                        const border = reacted ? "#FF00FF" : "#555";
+                        card += `<button onclick="reactToAnnouncement('${docId}', '${emoji}', ${reacted})" style="background-color: ${bg}; color: #FFF; border: 1px solid ${border}; margin-right: 6px; cursor: pointer; font-size: 14px; padding: 2px 8px;">${emoji} <span style="color:#0FF">${count}</span></button>`;
                     });
                     card += `</div>`;
 
