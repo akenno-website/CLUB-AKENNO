@@ -22,21 +22,12 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // -------------------------------------------------------------
-        // SMALL UTILITIES
-        // -------------------------------------------------------------
-
-        // Escape any user-supplied text before it goes into innerHTML.
-        // Without this, an announcement or shout containing "<img onerror=...>"
-        // would execute for every member who views it.
         function escapeHtml(str) {
             const div = document.createElement("div");
             div.textContent = str ?? "";
             return div.innerHTML;
         }
 
-        // Only allow http(s) image URLs. Blocks javascript:/data: tricks and
-        // just plain garbage input from breaking the layout.
         function sanitizeImageUrl(url) {
             if (!url) return "";
             try {
@@ -47,30 +38,11 @@
             }
         }
 
-        // Announcements are allowed raw HTML (buttons, links, etc) since
-        // only the admin can post them — see the admin gate on
-        // postAnnouncement/deleteAnnouncement below. This is intentionally
-        // NOT applied to shoutbox/leaderboard, which take input from any
-        // member and stay escaped.
         const REACTION_EMOJIS = ["❤️", "😆", "😢", "😡"];
 
-        // -------------------------------------------------------------
-        // ADMIN IDENTIFIERS
-        // -------------------------------------------------------------
-        // NOTE: This ONLY controls whether the admin UI is shown.
-        // A user who spoofs their client can still call deleteAnnouncement()
-        // directly from devtools. Real enforcement of who can delete/write
-        // announcements has to live in Firestore Security Rules, matched
-        // against auth.token.email or a custom claim — never trust the
-        // client for that decision. Also: displayName is user-editable, so
-        // it's dropped from this check; only the verified account email
-        // is compared.
         const ADMIN_EMAILS = ["akennmasangkay@gmail.com"];
         let isUserAdminGlobal = false;
 
-        // Keep handles to active listeners so we can tear them down
-        // before re-subscribing (onAuthStateChanged can fire more than
-        // once per session).
         let unsubAnnouncements = null;
         let unsubShoutbox = null;
         let unsubLeaderboard = null;
@@ -87,7 +59,6 @@
 
                 document.getElementById("adminPanel").style.display = isUserAdminGlobal ? "block" : "none";
 
-                // Tear down any previous listeners before re-subscribing
                 if (unsubAnnouncements) unsubAnnouncements();
                 if (unsubShoutbox) unsubShoutbox();
                 if (unsubLeaderboard) unsubLeaderboard();
@@ -104,12 +75,9 @@
             }
         });
 
-        // -------------------------------------------------------------
-        // ANNOUNCEMENT FUNCTIONS
-        // -------------------------------------------------------------
         window.postAnnouncement = async function (event) {
             event.preventDefault();
-            if (!isUserAdminGlobal) return; // real gate belongs in Firestore rules — see note above
+            if (!isUserAdminGlobal) return;
             const text = document.forms["announcementForm"]["announceText"].value.trim();
             const imgUrl = document.forms["announcementForm"]["announceImg"].value.trim();
             const currentUser = auth.currentUser;
@@ -131,9 +99,6 @@
             }
         };
 
-        // One reaction per emoji per user. Reactions store WHO reacted
-        // (uid arrays) rather than a bare counter, so clicking toggles
-        // your reaction on/off instead of letting you spam +1 forever.
         window.reactToAnnouncement = async function (docId, emoji, alreadyReacted) {
             const currentUser = auth.currentUser;
             if (!currentUser) return;
@@ -151,7 +116,7 @@
         };
 
         window.deleteAnnouncement = async function (docId) {
-            if (!isUserAdminGlobal) return; // belt and suspenders — rules still do the real gating
+            if (!isUserAdminGlobal) return;
             if (confirm("ARE YOU SURE YOU WANT TO DELETE THIS BROADCAST?")) {
                 try {
                     await deleteDoc(doc(db, "announcements", docId));
@@ -176,9 +141,6 @@
                 snapshot.forEach((docSnap) => {
                     const data = docSnap.data();
                     const docId = docSnap.id;
-                    // Announcements are admin-only content (see postAnnouncement
-                    // gate) so they're rendered raw — you can drop <a> and
-                    // <button> tags straight into the message box.
                     const author = data.author || "ADMIN";
                     const text = data.text || "";
                     const safeImg = sanitizeImageUrl(data.imageUrl);
@@ -223,9 +185,6 @@
             });
         }
 
-        // -------------------------------------------------------------
-        // SHOUTBOX LOGIC
-        // -------------------------------------------------------------
         window.postShout = async function (event) {
             event.preventDefault();
             const text = document.forms["shoutForm"]["shoutText"].value.trim();
@@ -264,9 +223,6 @@
             });
         }
 
-        // -------------------------------------------------------------
-        // HEAD CLICKER & LEADERBOARD (INSTANT UI + DEBOUNCED FIRESTORE)
-        // -------------------------------------------------------------
         let pendingClicks = 0;
         let clickFlushTimer = null;
         let currentLocalScore = 0;
@@ -290,7 +246,7 @@
                 }, { merge: true });
             } catch (err) {
                 console.error("Click sync error:", err);
-                pendingClicks += clicksToSubmit; // re-queue failed clicks
+                pendingClicks += clicksToSubmit;
             }
         }
 
@@ -310,8 +266,6 @@
             clickFlushTimer = setTimeout(flushPendingClicks, 800);
         };
 
-        // Don't lose a batch of clicks if the member closes the tab
-        // mid-debounce. sendBeacon-style "best effort" flush on unload.
         window.addEventListener("beforeunload", () => {
             if (pendingClicks > 0) {
                 if (clickFlushTimer) clearTimeout(clickFlushTimer);
@@ -333,14 +287,28 @@
                 const currentUser = auth.currentUser;
                 lbTable.innerHTML = "";
 
+                // Cosmetic-only pinned row. Doesn't touch Firestore, doesn't
+                // affect anyone else's real scores — just always renders
+                // akenno at #1 with an infinity symbol, regardless of
+                // actual click data in the database.
+                lbTable.innerHTML += `<tr bgcolor="#220033">
+                    <td align="center"><font color="#FF00FF">👑</font></td>
+                    <td><font color="#00FFFF"><b>akenno</b></font></td>
+                    <td align="right"><font color="#FFFF00"><b>∞</b></font></td>
+                </tr>`;
+
                 if (snapshot.empty) {
-                    lbTable.innerHTML = "<tr><td colspan='3' align='center'>No head clicks recorded yet!</td></tr>";
+                    lbTable.innerHTML += "<tr><td colspan='3' align='center'>No head clicks recorded yet!</td></tr>";
                     return;
                 }
 
-                let rank = 1;
+                let rank = 2;
                 snapshot.forEach((docSnap) => {
                     const data = docSnap.data();
+                    // Skip akenno's real doc in the normal list so they
+                    // don't appear twice.
+                    if ((data.username || "").toLowerCase() === "akenno") return;
+
                     const isCurrentUser = currentUser && docSnap.id === currentUser.uid;
 
                     if (isCurrentUser) {
@@ -362,7 +330,6 @@
             });
         }
 
-        // Logout Handler
         window.handleLogout = async function () {
             try {
                 await signOut(auth);
