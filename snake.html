@@ -75,6 +75,7 @@
 <body>
 
 
+    <img src="pic1.png">
     <font color="yellow" size="5"><a href="games.html">Go back home?</a></font>
 
     <br>
@@ -245,14 +246,19 @@
     gameStarted = false;
     draw();
   }
-  window.addEventListener("keydown", e => {
+  // WITH THIS:
+window.addEventListener("keydown", e => {
+  const keys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+  if (keys.includes(e.key)) {
+    e.preventDefault(); // Prevents the browser's default scroll behavior
     switch (e.key) {
       case "ArrowUp": changeDirection(0, -1); break;
       case "ArrowDown": changeDirection(0, 1); break;
       case "ArrowLeft": changeDirection(-1, 0); break;
       case "ArrowRight": changeDirection(1, 0); break;
     }
-  });
+  }
+});
 
   document.getElementById("btn-up").addEventListener("click", () => changeDirection(0, -1));
   document.getElementById("btn-down").addEventListener("click", () => changeDirection(0, 1));
