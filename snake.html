@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>*** CLUB AKENNO PIC5 SNAKE ARENA ***</title>
+  <style>
+    body {
+      background-image: url('pic5.png');
+      background-repeat: repeat;
+      color: #00FF00;
+      font-family: 'Comic Sans MS', 'Courier New', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    
+    /* Outer container with a subtle, light Magenta Tint */
+    #game-container {
+      background-color: rgba(255, 0, 255, 0.12); /* Ultra-light Magenta tint */
+      padding: 20px;
+      text-align: center;
+      border-radius: 8px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 1.2rem;
+      color: #FFFF00;
+      /* Shadow removed completely */
+      text-shadow: none; 
+    }
+
+    canvas {
+      display: block;
+      margin: 0 auto;
+    }
+
+    #controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-gap: 5px;
+      margin-top: 15px;
+      width: 180px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* Buttons with light Cyan Tint */
+    .btn {
+      background-color: rgba(0, 255, 255, 0.15); /* Light Cyan Tint */
+      color: #00FFFF;
+      border: none;
+      padding: 10px;
+      font-weight: bold;
+      cursor: pointer;
+      font-family: monospace;
+      border-radius: 4px;
+    }
+    .btn:active { 
+      background-color: rgba(255, 0, 255, 0.4); 
+      color: #FFF; 
+    }
+    .btn-up { grid-column: 2; }
+    .btn-left { grid-column: 1; grid-row: 2; }
+    .btn-right { grid-column: 3; grid-row: 2; }
+    .btn-down { grid-column: 2; grid-row: 3; }
+  </style>
+</head>
+<body>
+
+
+    <font color="yellow" size="5"><a href="games.html">Go back home?</a></font>
+
+    <br>
+<div id="game-container">
+  <div class="header">
+    <div>SCORE: <span id="score">0</span></div>
+    <div>HIGH SCORE: <span id="high-score">0</span></div>
+  </div>
+
+  <canvas id="snakeCanvas" width="400" height="400"></canvas>
+  
+  <div id="controls">
+    <div class="btn btn-up" id="btn-up">▲</div>
+    <div class="btn btn-left" id="btn-left">◄</div>
+    <div class="btn btn-right" id="btn-right">►</div>
+    <div class="btn btn-down" id="btn-down">▼</div>
+  </div>
+  <p style="color: #FF00FF; font-size: 12px; margin-top: 10px;">BEST VIEWED IN NETSCAPE NAVIGATOR</p>
+</div>
+
+<script>
+  const canvas = document.getElementById("snakeCanvas");
+  const ctx = canvas.getContext("2d");
+  const scoreEl = document.getElementById("score");
+  const highScoreEl = document.getElementById("high-score");
+
+  // Load main texture asset
+  const pic5 = new Image();
+  pic5.src = "pic5.png";
+
+  const gridSize = 20;
+  const tileCount = canvas.width / gridSize;
+  
+  let snake = [{ x: 10, y: 10 }];
+  let food = { x: 15, y: 15 };
+  let dx = 0, dy = 0, score = 0;
+  let highScore = localStorage.getItem("akennoSnakeHigh") || 0;
+  let gameInterval, gameStarted = false;
+
+  highScoreEl.innerText = highScore;
+
+  function gameLoop() {
+    if (!gameStarted) return;
+    moveSnake();
+    if (checkCollision()) { resetGame(); return; }
+    draw();
+  }
+
+  function moveSnake() {
+    const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+    snake.unshift(head);
+
+    if (head.x === food.x && head.y === food.y) {
+      score += 10;
+      scoreEl.innerText = score;
+      if (score > highScore) {
+        highScore = score;
+        highScoreEl.innerText = highScore;
+        localStorage.setItem("akennoSnakeHigh", highScore);
+      }
+      generateFood();
+    } else {
+      snake.pop();
+    }
+  }
+
+  function generateFood() {
+    food = {
+      x: Math.floor(Math.random() * tileCount),
+      y: Math.floor(Math.random() * tileCount)
+    };
+    snake.forEach(segment => {
+      if (segment.x === food.x && segment.y === food.y) generateFood();
+    });
+  }
+
+  function checkCollision() {
+    const head = snake[0];
+    if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) return true;
+    for (let i = 1; i < snake.length; i++) {
+      if (head.x === snake[i].x && head.y === snake[i].y) return true;
+    }
+    return false;
+  }
+
+  function draw() {
+    // 1. Canvas BG: Tiled pic5.png + very light Dark Tint
+    if (pic5.complete) {
+      const pattern = ctx.createPattern(pic5, 'repeat');
+      ctx.fillStyle = pattern;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    // Very subtle darkening tint
+    ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 2. Food: pic5.png + Lighter Red Tint
+    const foodX = food.x * gridSize;
+    const foodY = food.y * gridSize;
+    ctx.drawImage(pic5, foodX, foodY, gridSize, gridSize);
+    ctx.fillStyle = "rgba(255, 0, 80, 0.35)"; // Lighter Red Tint
+    ctx.fillRect(foodX, foodY, gridSize, gridSize);
+
+    // 3. Snake: pic5.png + Lighter Green / Yellow Tints
+    snake.forEach((segment, index) => {
+      const segX = segment.x * gridSize;
+      const segY = segment.y * gridSize;
+      ctx.drawImage(pic5, segX, segY, gridSize, gridSize);
+
+      if (index === 0) {
+        // Snake Head Tint = Light Yellow
+        ctx.fillStyle = "rgba(255, 255, 0, 0.4)";
+      } else {
+        // Snake Body Tint = Light Neon Green
+        ctx.fillStyle = "rgba(0, 255, 0, 0.35)";
+      }
+      ctx.fillRect(segX, segY, gridSize, gridSize);
+    });
+
+    // Start prompt overlay
+    if (!gameStarted) {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#00FFFF";
+      ctx.font = "bold 18px 'Comic Sans MS', cursive";
+      ctx.textAlign = "center";
+      ctx.fillText("PRESS ARROWS TO START ARENA", canvas.width / 2, canvas.height / 2);
+    }
+  }
+
+  function changeDirection(newDx, newDy) {
+    if (!gameStarted) {
+      gameStarted = true;
+      gameInterval = setInterval(gameLoop, 80);
+    }
+    if (newDx === -dx && newDx !== 0) return;
+    if (newDy === -dy && newDy !== 0) return;
+    dx = newDx;
+    dy = newDy;
+  }
+
+  function resetGame() {
+    clearInterval(gameInterval);
+
+    // Encode site URL & hashtag message
+    const siteUrl = encodeURIComponent(window.location.href);
+    const customHashtag = encodeURIComponent(`#IGot${score}ScoresBeforeIDiedOnAkennosCoolFanclub`);
+    const fbShareLink = `https://www.facebook.com/sharer/sharer.php?u=${siteUrl}&hashtag=${customHashtag}`;
+
+    // Prompt user to share on Facebook
+    const wantToShare = confirm(
+      `GAME OVER! SCORE: ${score}\n\nDo you want to post your score on Facebook?`
+    );
+
+    if (wantToShare) {
+      window.open(fbShareLink, '_blank', 'width=600,height=400');
+    }
+
+    // Reset game state
+    snake = [{ x: 10, y: 10 }];
+    dx = 0;
+    dy = 0;
+    score = 0;
+    scoreEl.innerText = score;
+    gameStarted = false;
+    draw();
+  }
+  window.addEventListener("keydown", e => {
+    switch (e.key) {
+      case "ArrowUp": changeDirection(0, -1); break;
+      case "ArrowDown": changeDirection(0, 1); break;
+      case "ArrowLeft": changeDirection(-1, 0); break;
+      case "ArrowRight": changeDirection(1, 0); break;
+    }
+  });
+
+  document.getElementById("btn-up").addEventListener("click", () => changeDirection(0, -1));
+  document.getElementById("btn-down").addEventListener("click", () => changeDirection(0, 1));
+  document.getElementById("btn-left").addEventListener("click", () => changeDirection(-1, 0));
+  document.getElementById("btn-right").addEventListener("click", () => changeDirection(1, 0));
+
+  pic5.onload = () => { draw(); };
+  draw();
+</script>
+</body>
+</html>

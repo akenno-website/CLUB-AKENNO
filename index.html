@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>*** WELCOME TO CLUB AKENNO - OFFICIAL SITE ***</title>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyC5RIt66tqj_E7Xj_1UarhaIcGWezIVVVY",
+            authDomain: "club-akenno.firebaseapp.com",
+            projectId: "club-akenno",
+            storageBucket: "club-akenno.firebasestorage.app",
+            messagingSenderId: "515392757059",
+            appId: "1:515392757059:web:5185d8c5173aa0a4b6e3f6",
+            measurementId: "G-9RWL6RHRJN"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                console.log("Logged in as:", user.displayName || user.email);
+            }
+        });
+
+        // Login Handler (Supports Username OR Email)
+        window.handleLogin = async function(event) {
+            event.preventDefault();
+            const userInput = document.forms["loginForm"]["usernameOrEmail"].value.trim();
+            const pass = document.forms["loginForm"]["password"].value.trim();
+
+            let targetEmail = userInput;
+
+            try {
+                if (!userInput.includes("@")) {
+                    const usernameRef = doc(db, "usernames", userInput.toLowerCase());
+                    const usernameSnap = await getDoc(usernameRef);
+
+                    if (!usernameSnap.exists()) {
+                        throw new Error("Username not found.");
+                    }
+                    targetEmail = usernameSnap.data().email;
+                }
+
+                const userCredential = await signInWithEmailAndPassword(auth, targetEmail, pass);
+                const displayName = userCredential.user.displayName || userCredential.user.email;
+                alert("ACCESS GRANTED: Welcome back, " + displayName + "!");
+                window.location.href = "home_logged_in.html";
+            } catch (err) {
+                alert("ACCESS DENIED: " + err.message);
+            }
+        };
+
+        // Signup Handler
+        // Signup Handler
+window.handleRegister = async function(event) {
+    event.preventDefault();
+    const username = document.forms["registerForm"]["regUsername"].value.trim();
+    const email = document.forms["registerForm"]["regEmail"].value.trim();
+    const pass = document.forms["registerForm"]["regPassword"].value.trim();
+
+    const usernameKey = username.toLowerCase();
+    const usernameRef = doc(db, "usernames", usernameKey);
+
+    try {
+        // 1. Create the Auth account first (authenticates the user)
+        const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+
+        // 2. Check if username document exists in Firestore
+        const usernameSnap = await getDoc(usernameRef);
+        if (usernameSnap.exists()) {
+            throw new Error("That username is already taken!");
+        }
+
+        // 3. Update auth display name & save mapping
+        await updateProfile(userCredential.user, { displayName: username });
+        await setDoc(usernameRef, {
+            email: email,
+            uid: userCredential.user.uid
+        });
+
+        alert("ACCOUNT CREATED: Welcome to the club, " + username + "!");
+        window.location.href = "home_logged_in.html";
+    } catch (err) {
+        alert("SIGNUP ERROR: " + err.message);
+    }
+};
+    </script>
+</head>
+<body bgcolor="#000000" text="#00FF00" link="#FF00FF" vlink="#00FFFF" background="https://www.transparenttextures.com/patterns/stardust.png">
+
+    <center>
+        <font size="6" face="Comic Sans MS, Arial" color="#FFFF00">
+            <b>WELCOME TO THE OFFICIAL CLUB Akenno HOMEPAGE</b>
+        </font>
+        <br><br>
+        <marquee scrollamount="8" width="80%">
+            <font color="#FF0000"><b>*** LOGIN OR REGISTER BELOW *** AUTHORIZED PERSONNEL ONLY ***</b></font>
+        </marquee>
+    </center>
+
+    <hr size="5" color="#FF00FF">
+
+    <table border="5" cellpadding="10" cellspacing="5" width="90%" align="center" bgcolor="#000033">
+        <tr>
+            <td width="30%" valign="top" bgcolor="#111111">
+                
+                <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
+                    <tr>
+                        <td align="center" bgcolor="#000080">
+                            <font color="#FFFFFF" face="Arial" size="2"><b>[ MEMBER LOGIN ]</b></font>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <form name="loginForm" onsubmit="handleLogin(event)">
+                                <font face="Courier New" size="2" color="#00FF00">
+                                    USERNAME OR EMAIL:<br>
+                                    <input type="text" name="usernameOrEmail" size="15" required><br><br>
+                                    PASSWORD:<br>
+                                    <input type="password" name="password" size="15" required><br><br>
+                                    <input type="submit" value="LOGIN">
+                                </font>
+                            </form>
+                        </td>
+                    </tr>
+                </table>
+
+                <br><hr color="#FF00FF"><br>
+
+                <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
+                    <tr>
+                        <td align="center" bgcolor="#800000">
+                            <font color="#FFFFFF" face="Arial" size="2"><b>[ NEW MEMBER SIGNUP ]</b></font>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <form name="registerForm" onsubmit="handleRegister(event)">
+                                <font face="Courier New" size="2" color="#00FF00">
+                                    USERNAME:<br>
+                                    <input type="text" name="regUsername" size="15" required><br><br>
+                                    EMAIL:<br>
+                                    <input type="email" name="regEmail" size="15" required><br><br>
+                                    PASSWORD:<br>
+                                    <input type="password" name="regPassword" size="15" required><br><br>
+                                    <input type="submit" value="REGISTER">
+                                </font>
+                            </form>
+                        </td>
+                    </tr>
+                </table>
+
+                <br><hr color="#FF00FF"><br>
+
+                <font face="Times New Roman" color="#FFFFFF">
+                    <h3><b><u>NAVIGATION</u></b></h3>
+                    <ul>
+                        <li><a href="index.html">Home</a></li>
+                        <li><a href="about.html">About Me</a></li>
+                        <li><a href="gallery.html">Gallery</a></li>
+                        <li><a href="games.html">Games</a></li>
+                        <img src="pic1.png" style="max-width: 75%; height: auto;">
+                        <img src="pic2.jpg" style="max-width: 75%; height: auto;">
+                    </ul>
+                    <br>
+                    <center>
+                        <font size="2" color="yellow">BEST VIEWED IN<br>NETSCAPE NAVIGATOR 4.0</font>
+                    </center>
+                </font>
+            </td>
+
+            <td width="70%" valign="top">
+                <h2><font color="#00FFFF" face="Comic Sans MS">Welcome</font></h2>
+                <p>
+                    Hi, welcome to my website. IM SORRY FOR THE GFORMS USERS THAT LOST THEIR ACCOUNTS, PLEASE JUST MAKE A NEW ONE SORRY.
+                </p>
+
+                <hr color="#00FF00">
+
+                <br>
+                <h2><font color="yellow">PICTURE</font></h2>
+                
+                <center><img src="pic4.PNG" style="max-width: 75%; height: auto;"></center>
+                
+                <br>
+
+                <center><img src="underconstruction.gif" style="max-width: 50%; height: auto;"></center>
+            </td>
+        </tr>
+    </table>
+
+    <br><br>
+
+    <center>
+        <hr size="3" color="#FF00FF" width="50%">
+        <font color="#FFFFFF" size="2">
+            VISITOR COUNTER:<br>
+            <table border="1" bgcolor="#000000" cellpadding="3">
+                <tr>
+                    <td><font color="#00FF00" face="Courier"><b>000001</b></font></td>
+                </tr>
+            </table>
+            <br>
+            <i>Copyright &copy; 2026 Club Akenno. All Rights Reserved.</i>
+            <br>
+            <i>Contact: clubakenno@aol.com</i>
+        </font>
+    </center>
+
+</body>
+</html>

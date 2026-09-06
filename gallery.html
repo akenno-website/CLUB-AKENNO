@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>*** CLUB AKENNO - MEDIA GALLERY ***</title>
+    <script>
+        // =========================================================
+        // ADD ALL YOUR PHOTOS HERE IN ONE PLACE!
+        // =========================================================
+        var galleryData = [
+            { title: "Construction GIF", url: "https://media.giphy.com/media/13Hgw8T855x5za/giphy.gif", isPro: false },
+            { title: "Dancing Baby", url: "https://media.giphy.com/media/26tn33PNiAT2A48qQ/giphy.gif", isPro: false },
+            { title: "Akenno Moo", url: "pic1.png", isPro: true },
+            { title: "Akenno Tie", url: "pic2.jpg", isPro: true },
+            { title: "Akenno Green", url: "https://scontent.fmnl25-4.fna.fbcdn.net/v/t39.30808-6/774557208_1587940899690313_6077280004389671638_n.jpg?stp=dst-jpg_tt6&cstp=mx960x957&ctp=s960x957&_nc_cat=107&ccb=1-7&_nc_sid=a5f93a&_nc_eui2=AeGN9-m2BQG6oX6i7CpvOy9W0F5gUuWDlxHQXmBS5YOXEXjG-OGhrWMQyw3wF2LpjRMGnDoNCf75P4obSEkwz1PC&_nc_ohc=HZ1VsLNcG7UQ7kNvwHdMT-_&_nc_oc=Ado-7cDEqpIO_AZEXgOoDnBbDtjUFLXBPTQA5ut777OOcSpu2qDjc7KgfgqA2jDU2jjx1QqTa3veQLBad1ihhawG&_nc_zt=23&_nc_ht=scontent.fmnl25-4.fna&_nc_gid=1_9hhCB1yPg04c6tAZXipw&_nc_ss=7b2a8&oh=00_AQJOpFW6cP5nvR-bVJychoK2nClLctCR1hj-rAuEZHTV_A&oe=6AA1886C",  isPro: true },
+            { title: "Akenno Zoom", url: "https://scontent.fmnl9-1.fna.fbcdn.net/v/t39.30808-6/480758202_1161882688962805_4756477972707741310_n.jpg?stp=dst-jpg_tt6&cstp=mx953x960&ctp=s953x960&_nc_cat=106&_nc_map=urlgen_bucketless&ccb=1-7&_nc_sid=a5f93a&_nc_eui2=AeEp2HHfw_932wOqjjPzhQa5ShQ7L4H6ustKFDsvgfq6y2hgiHOc75idZDiB9mqCBXinGvEQ7JpLjD-3a4OMdlb6&_nc_ohc=MYqsELnhyK4Q7kNvwHWyVhU&_nc_oc=Ado-8O__atMxILAZcXtk8v4eAJY-4XkzmuMYqVI3EaVmp8N0ucQfh3PICpNXzfhaA9s&_nc_zt=23&_nc_ht=scontent.fmnl9-1.fna&_nc_gid=ANaZu8KSCts4Fd-bVxzKRQ&_nc_ss=7b2a8&oh=00_AQLNJjwgbsBNz0vlzbCCN7tg7yEuHOSzoHJMDMHq9xWSgA&oe=6AA339D3",  isPro: true },
+            { title: "Akenno Zoom", url: "https://scontent.fmnl25-5.fna.fbcdn.net/v/t39.30808-6/486620873_1185176573300083_3646526434574894938_n.jpg?stp=dst-jpg_tt6&cstp=mx720x733&ctp=s720x733&_nc_cat=104&ccb=1-7&_nc_sid=a5f93a&_nc_eui2=AeG5Z85VrHwIJADinQ7XvlvC_LeeEelQqdn8t54R6VCp2cLxHp6qkzcCy0jT3VNsxK_XLOmBMK52BZvbtcncfUJP&_nc_ohc=bIU9pa5j2YAQ7kNvwFb_1XJ&_nc_oc=AdrKmQB-hMr-anrryyMm4YvQAx2Bx737Ba-P6HQqlRZEv9SImcEk9cIXaa1uyahXxhV4Yak53gHB6R63oHvZXOyl&_nc_zt=23&_nc_ht=scontent.fmnl25-5.fna&_nc_gid=s-w9y_1Ut4a17dgBMYwDVQ&_nc_ss=7b2a8&oh=00_AQIKaAKyAaRYRLy4X2txpnmWtWyH5hJF9AK7tu9RUN1MPg&oe=6AA3169D",  isPro: true },
+            { title: "Secret VIP Flame", url: "https://web.archive.org/web/20090830022830/http://geocities.com/clipart/pagan/flame.gif", isPro: true }
+        ];
+
+        function renderGallery() {
+    // 1. Grab metadata directly from the URL parameter (e.g., gallery.html?access=pro)
+    var urlParams = new URLSearchParams(window.location.search);
+    var accessParam = urlParams.get("access");
+
+    // 2. Grant PRO access ONLY if the URL parameter specifically equals "pro"
+    var isProAccess = (accessParam === "pro");
+    
+    var grid = document.getElementById("galleryGrid");
+    var notice = document.getElementById("statusNotice");
+    var html = "";
+
+    if (isProAccess) {
+        notice.innerHTML = "<font color='#00FF00'><b>[ PRO ACCESS UNLOCKED ]</b> Welcome to the VIP Vault! Showing full archive.</font>";
+    } else {
+        notice.innerHTML = "<font color='#FF0000'><b>[ PLEB MODE ]</b> Showing public images only. <a href='index.html'><font color='#FFFF00'>Login</font></a> for PRO photos.</font>";
+    }
+
+    // Loop through all images and render based on the URL flag
+    for (var i = 0; i < galleryData.length; i++) {
+        var item = galleryData[i];
+
+        // Skip PRO images if access parameter is missing
+        if (item.isPro && !isProAccess) {
+            continue;
+        }
+
+        var badge = item.isPro ? "<font color='#FF00FF'><b>[PRO]</b></font> " : "<font color='#00FFFF'>[PUBLIC]</font> ";
+
+        html += "<td align='center' bgcolor='#000000' style='border: 2px solid #FF00FF; padding: 10px;' valign='top'>";
+        html += "<img src='" + item.url + "' style='max-width: 150px; height: auto;'><br><br>";
+        html += "<font size='2' color='#FFFF00'>" + badge + "<br>" + item.title + "</font>";
+        html += "</td>";
+    }
+
+    grid.innerHTML = html;
+}
+    </script>
+</head>
+<body bgcolor="#000000" text="#00FF00" link="#FF00FF" vlink="#00FFFF" background="https://www.transparenttextures.com/patterns/stardust.png" onload="renderGallery()">
+
+    <center>
+        <font size="6" face="Comic Sans MS, Arial" color="#FFFF00">
+            <b>*** CLUB AKENNO MEDIA GALLERY ***</b>
+        </font>
+        <br><br>
+        <marquee scrollamount="8" width="80%">
+            <font color="#00FFFF"><b>*** WARNING: HIGH-RESOLUTION GIFS BELOW *** TAKE TIME TO LOAD ON 56k DIAL-UP ***</b></font>
+        </marquee>
+    </center>
+
+    <hr size="5" color="#FF00FF">
+
+    <table border="5" cellpadding="10" cellspacing="5" width="90%" align="center" bgcolor="#000033">
+        <tr>
+            <!-- SIDEBAR -->
+            <td width="25%" valign="top" bgcolor="#111111">
+                <font face="Times New Roman" color="#FFFFFF">
+                    <h3><b><u>NAVIGATION</u></b></h3>
+                    <ul>
+                        <li><a href="index.html">Home / Login</a></li>
+                        <li><a href="about.html">About Me</a></li>
+                        <li><a href="games.html">Games</a></li>
+                    </ul>
+                </font>
+                <br><hr color="#FF00FF"><br>
+                <center>
+                    <img src="pic1.png" style="max-width: 75%; height: auto;"><br><br>
+                    <img src="pic2.jpg" style="max-width: 75%; height: auto;"><br><br>
+                    <font size="1" color="#FF0000">HOT CONTENT INSIDE</font>
+                </center>
+            </td>
+
+            <!-- MAIN CONTENT -->
+            <td width="75%" valign="top">
+                <div id="statusNotice" style="background:#111; padding:10px; border:1px solid #00FF00; margin-bottom:15px;"></div>
+
+                <h2><font color="#00FFFF" face="Comic Sans MS">Media Vault</font></h2>
+                
+                <table cellpadding="8" width="100%">
+                    <tr id="galleryGrid">
+                        <!-- Dynamic Photos Inject Here -->
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+
+    <br><br>
+    <center>
+        <font color="#FFFFFF" size="2">
+        <i>Copyright &copy; 2026 Club Akenno. All Rights Reserved.</i>
+        <br>
+        <i>Contact: clubakenno@aol.com</i>
+        </font>
+    </center>
+
+</body>
+</html>

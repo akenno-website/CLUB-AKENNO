@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>*** CLUB AKENNO - MEMBERS AREA ***</title>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, doc, deleteDoc, setDoc, onSnapshot, query, orderBy, limit, serverTimestamp, increment, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyC5RIt66tqj_E7Xj_1UarhaIcGWezIVVVY",
+            authDomain: "club-akenno.firebaseapp.com",
+            projectId: "club-akenno",
+            storageBucket: "club-akenno.firebasestorage.app",
+            messagingSenderId: "515392757059",
+            appId: "1:515392757059:web:5185d8c5173aa0a4b6e3f6",
+            measurementId: "G-9RWL6RHRJN"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        function escapeHtml(str) {
+            const div = document.createElement("div");
+            div.textContent = str ?? "";
+            return div.innerHTML;
+        }
+
+        function sanitizeImageUrl(url) {
+            if (!url) return "";
+            try {
+                const parsed = new URL(url);
+                return ["http:", "https:"].includes(parsed.protocol) ? url : "";
+            } catch {
+                return "";
+            }
+        }
+
+        const REACTION_EMOJIS = ["❤️", "😆", "😢", "😡"];
+
+        const ADMIN_EMAILS = ["akennmasangkay@gmail.com"];
+        let isUserAdminGlobal = false;
+
+        let unsubAnnouncements = null;
+        let unsubShoutbox = null;
+        let unsubLeaderboard = null;
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                const displayName = user.displayName || user.email;
+                document.getElementById("welcomeMsg").innerText = "WELCOME, MEMBER " + displayName.toUpperCase() + "!";
+                document.getElementById("userInfo").innerHTML = "Logged in as: " + escapeHtml(user.email) + "<br>Session: " + crypto.randomUUID();
+
+                isUserAdminGlobal = ADMIN_EMAILS.some(
+                    (email) => email.toLowerCase() === user.email.toLowerCase()
+                );
+
+                document.getElementById("adminPanel").style.display = isUserAdminGlobal ? "block" : "none";
+
+                if (unsubAnnouncements) unsubAnnouncements();
+                if (unsubShoutbox) unsubShoutbox();
+                if (unsubLeaderboard) unsubLeaderboard();
+
+                unsubAnnouncements = listenToAnnouncements();
+                unsubShoutbox = listenToShoutbox();
+                unsubLeaderboard = listenToLeaderboard();
+            } else {
+                if (unsubAnnouncements) unsubAnnouncements();
+                if (unsubShoutbox) unsubShoutbox();
+                if (unsubLeaderboard) unsubLeaderboard();
+                alert("RESTRICTED AREA: You must be logged in to view this page.");
+                window.location.href = "index.html";
+            }
+        });
+
+        window.postAnnouncement = async function (event) {
+            event.preventDefault();
+            if (!isUserAdminGlobal) return;
+            const text = document.forms["announcementForm"]["announceText"].value.trim();
+            const imgUrl = document.forms["announcementForm"]["announceImg"].value.trim();
+            const currentUser = auth.currentUser;
+            if (!text || !currentUser) return;
+
+            try {
+                await addDoc(collection(db, "announcements"), {
+                    author: currentUser.displayName || currentUser.email,
+                    text: text,
+                    imageUrl: sanitizeImageUrl(imgUrl),
+                    reactions: {},
+                    timestamp: serverTimestamp()
+                });
+
+                alert("ANNOUNCEMENT BROADCASTED SUCCESSFULLY!");
+                document.forms["announcementForm"].reset();
+            } catch (err) {
+                alert("BROADCAST ERROR: " + err.message);
+            }
+        };
+
+        window.reactToAnnouncement = async function (docId, emoji, alreadyReacted) {
+            const currentUser = auth.currentUser;
+            if (!currentUser) return;
+            try {
+                await setDoc(doc(db, "announcements", docId), {
+                    reactions: {
+                        [emoji]: alreadyReacted
+                            ? arrayRemove(currentUser.uid)
+                            : arrayUnion(currentUser.uid)
+                    }
+                }, { merge: true });
+            } catch (err) {
+                console.error("Reaction error:", err);
+            }
+        };
+
+        window.deleteAnnouncement = async function (docId) {
+            if (!isUserAdminGlobal) return;
+            if (confirm("ARE YOU SURE YOU WANT TO DELETE THIS BROADCAST?")) {
+                try {
+                    await deleteDoc(doc(db, "announcements", docId));
+                    alert("BROADCAST PURGED!");
+                } catch (err) {
+                    alert("DELETE ERROR: " + err.message);
+                }
+            }
+        };
+
+        function listenToAnnouncements() {
+            const annQuery = query(collection(db, "announcements"), orderBy("timestamp", "desc"));
+            return onSnapshot(annQuery, (snapshot) => {
+                const feedContainer = document.getElementById("announcementFeed");
+                feedContainer.innerHTML = "";
+
+                if (snapshot.empty) {
+                    feedContainer.innerHTML = "<i>No announcements broadcasted yet...</i>";
+                    return;
+                }
+
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    const docId = docSnap.id;
+                    const author = data.author || "ADMIN";
+                    const text = data.text || "";
+                    const safeImg = sanitizeImageUrl(data.imageUrl);
+                    const reactions = data.reactions || {};
+
+                    let card = `<table border="2" width="100%" bgcolor="#000000" cellpadding="8" style="margin-bottom: 15px;">
+                        <tr>
+                            <td bgcolor="#800080" style="display: flex; justify-content: space-between; align-items: center;">
+                                <font color="#FFFF00" face="Courier New" size="2">
+                                    <b>[BROADCAST FROM: ${author}]</b>
+                                </font>`;
+
+                    if (isUserAdminGlobal) {
+                        card += `<button onclick="deleteAnnouncement('${docId}')" style="background-color: #FF0000; color: #FFFFFF; font-weight: bold; cursor: pointer; border: 1px solid #FFF;">DELETE</button>`;
+                    }
+
+                    card += `</td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <font color="#00FF00" face="Arial" size="3"><p>${text}</p></font>`;
+
+                    if (safeImg) {
+                        card += `<center><img src="${safeImg}" style="max-width: 80%; height: auto; border: 2px solid #FF00FF; margin-top: 5px;"></center>`;
+                    }
+
+                    card += `<div style="margin-top: 8px;">`;
+                    const currentUid = auth.currentUser ? auth.currentUser.uid : null;
+                    REACTION_EMOJIS.forEach((emoji) => {
+                        const uids = Array.isArray(reactions[emoji]) ? reactions[emoji] : [];
+                        const count = uids.length;
+                        const reacted = currentUid && uids.includes(currentUid);
+                        const bg = reacted ? "#440066" : "#111";
+                        const border = reacted ? "#FF00FF" : "#555";
+                        card += `<button onclick="reactToAnnouncement('${docId}', '${emoji}', ${reacted})" style="background-color: ${bg}; color: #FFF; border: 1px solid ${border}; margin-right: 6px; cursor: pointer; font-size: 14px; padding: 2px 8px;">${emoji} <span style="color:#0FF">${count}</span></button>`;
+                    });
+                    card += `</div>`;
+
+                    card += `</td></tr></table>`;
+                    feedContainer.innerHTML += card;
+                });
+            });
+        }
+
+        window.postShout = async function (event) {
+            event.preventDefault();
+            const text = document.forms["shoutForm"]["shoutText"].value.trim();
+            const currentUser = auth.currentUser;
+            if (!text || !currentUser) return;
+
+            try {
+                await addDoc(collection(db, "shoutbox"), {
+                    username: currentUser.displayName || currentUser.email,
+                    text: text,
+                    timestamp: serverTimestamp()
+                });
+                document.forms["shoutForm"].reset();
+            } catch (err) {
+                alert("SHOUT ERROR: " + err.message);
+            }
+        };
+
+        function listenToShoutbox() {
+            const shoutQuery = query(collection(db, "shoutbox"), orderBy("timestamp", "desc"), limit(15));
+            return onSnapshot(shoutQuery, (snapshot) => {
+                const box = document.getElementById("shoutboxMessages");
+                box.innerHTML = "";
+                if (snapshot.empty) {
+                    box.innerHTML = "<i>No shouts yet. Break the silence!</i>";
+                    return;
+                }
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    const name = escapeHtml(data.username || "Anonymous");
+                    const text = escapeHtml(data.text || "");
+                    box.innerHTML += `<div style="margin-bottom: 6px; border-bottom: 1px dashed #333; padding-bottom: 4px;">
+                        <font color="#FFFF00"><b>${name}:</b></font> <font color="#FFFFFF">${text}</font>
+                    </div>`;
+                });
+            });
+        }
+
+        let pendingClicks = 0;
+        let clickFlushTimer = null;
+        let currentLocalScore = 0;
+
+        async function flushPendingClicks() {
+            if (pendingClicks === 0) return;
+            const currentUser = auth.currentUser;
+            if (!currentUser) return;
+
+            const clicksToSubmit = pendingClicks;
+            pendingClicks = 0;
+
+            const userRef = doc(db, "leaderboard", currentUser.uid);
+            const username = currentUser.displayName || currentUser.email;
+
+            try {
+                await setDoc(userRef, {
+                    username: username,
+                    clicks: increment(clicksToSubmit),
+                    lastUpdated: serverTimestamp()
+                }, { merge: true });
+            } catch (err) {
+                console.error("Click sync error:", err);
+                pendingClicks += clicksToSubmit;
+            }
+        }
+
+        window.clickHead = function () {
+            const currentUser = auth.currentUser;
+            if (!currentUser) return;
+
+            const img = document.getElementById("akennoHead");
+            img.style.transform = "scale(0.85)";
+            setTimeout(() => { img.style.transform = "scale(1)"; }, 100);
+
+            pendingClicks++;
+            currentLocalScore++;
+            updateLocalLeaderboardUI(currentUser.uid, currentLocalScore);
+
+            if (clickFlushTimer) clearTimeout(clickFlushTimer);
+            clickFlushTimer = setTimeout(flushPendingClicks, 800);
+        };
+
+        window.addEventListener("beforeunload", () => {
+            if (pendingClicks > 0) {
+                if (clickFlushTimer) clearTimeout(clickFlushTimer);
+                flushPendingClicks();
+            }
+        });
+
+        function updateLocalLeaderboardUI(userId, newScore) {
+            const userRow = document.getElementById(`score-${userId}`);
+            if (userRow) {
+                userRow.innerText = newScore;
+            }
+        }
+
+        function listenToLeaderboard() {
+            const lbQuery = query(collection(db, "leaderboard"), orderBy("clicks", "desc"), limit(10));
+            return onSnapshot(lbQuery, (snapshot) => {
+                const lbTable = document.getElementById("leaderboardEntries");
+                const currentUser = auth.currentUser;
+                lbTable.innerHTML = "";
+
+                // Cosmetic-only pinned row. Doesn't touch Firestore, doesn't
+                // affect anyone else's real scores — just always renders
+                // akenno at #1 with an infinity symbol, regardless of
+                // actual click data in the database.
+                lbTable.innerHTML += `<tr bgcolor="#220033">
+                    <td align="center"><font color="#FF00FF">1</font></td>
+                    <td><font color="#00FFFF"><b>akenno</b></font></td>
+                    <td align="right"><font color="#FFFF00" size="4"><center><b>∞</b></center></font></td>
+                </tr>`;
+
+                if (snapshot.empty) {
+                    lbTable.innerHTML += "<tr><td colspan='3' align='center'>No head clicks recorded yet!</td></tr>";
+                    return;
+                }
+
+                let rank = 2;
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    // Skip akenno's real doc in the normal list so they
+                    // don't appear twice.
+                    if ((data.username || "").toLowerCase() === "akenno") return;
+
+                    const isCurrentUser = currentUser && docSnap.id === currentUser.uid;
+
+                    if (isCurrentUser) {
+                        currentLocalScore = (data.clicks || 0) + pendingClicks;
+                    }
+
+                    const displayClicks = isCurrentUser ? currentLocalScore : (data.clicks || 0);
+                    const safeUsername = escapeHtml(data.username || "Anonymous");
+
+                    lbTable.innerHTML += `<tr>
+                        <td align="center"><font color="#FF00FF">${rank}</font></td>
+                        <td><font color="#00FFFF">${safeUsername}</font></td>
+                        <td align="right">
+                            <font color="#00FF00" id="score-${docSnap.id}">${displayClicks}</font>
+                        </td>
+                    </tr>`;
+                    rank++;
+                });
+            });
+        }
+
+        window.handleLogout = async function () {
+            try {
+                await signOut(auth);
+                alert("YOU HAVE LOGGED OUT SUCCESSFULLY.");
+                window.location.href = "index.html";
+            } catch (err) {
+                alert("LOGOUT ERROR: " + err.message);
+            }
+        };
+    </script>
+</head>
+<body bgcolor="#000000" text="#00FF00" link="#FF00FF" vlink="#00FFFF" background="https://www.transparenttextures.com/patterns/stardust.png">
+
+    <center>
+        <font size="6" face="Comic Sans MS, Arial" color="#FFFF00">
+            <b>*** CLUB AKENNO MEMBERS ONLY ZONE ***</b>
+        </font>
+        <br><br>
+        <marquee scrollamount="8" width="80%">
+            <font color="#00FFFF"><b>*** ACCESS GRANTED *** WELCOME TO THE SECRET HQ *** NO OUTSIDERS ALLOWED ***</b></font>
+        </marquee>
+    </center>
+
+    <hr size="5" color="#FF00FF">
+
+    <table border="5" cellpadding="10" cellspacing="5" width="90%" align="center" bgcolor="#000033">
+        <tr>
+            <td width="30%" valign="top" bgcolor="#111111">
+                <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
+                    <tr>
+                        <td align="center" bgcolor="#008000">
+                            <font color="#FFFFFF" face="Arial" size="2"><b>[ USER STATUS ]</b></font>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <font face="Courier New" size="2" color="#00FF00">
+                                <p id="userInfo">Checking auth...</p>
+                                <br>
+                                <button onclick="handleLogout()" style="background-color: #800000; color: #FFFFFF; font-weight: bold; cursor: pointer;">LOGOUT</button>
+                            </font>
+                        </td>
+                    </tr>
+                </table>
+
+                <br><hr color="#FF00FF"><br>
+
+                <div id="adminPanel" style="display: none;">
+                    <table border="3" bgcolor="#000000" width="100%" cellpadding="5" bordercolor="#FF0000">
+                        <tr>
+                            <td align="center" bgcolor="#800000">
+                                <font color="#FFFF00" face="Comic Sans MS" size="2"><b>*** ADMIN COMMAND POST ***</b></font>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <form name="announcementForm" onsubmit="postAnnouncement(event)">
+                                    <font face="Courier New" size="2" color="#00FFFF">
+                                        ANNOUNCEMENT MSG:<br>
+                                        <textarea name="announceText" rows="3" cols="20" required style="width: 95%; background-color: #111; color: #00FF00;"></textarea><br><br>
+                                        IMAGE URL (OPTIONAL):<br>
+                                        <input type="url" name="announceImg" placeholder="https://..." style="width: 95%; background-color: #111; color: #00FF00;"><br><br>
+                                        <input type="submit" value="BROADCAST NOW" style="background-color: #FF00FF; color: #000; font-weight: bold; cursor: pointer;">
+                                    </font>
+                                </form>
+                            </td>
+                        </tr>
+                    </table>
+                    <br><hr color="#FF00FF"><br>
+                </div>
+
+                <table border="3" bgcolor="#000000" width="100%" cellpadding="5" bordercolor="#00FFFF">
+                    <tr>
+                        <td align="center" bgcolor="#008080">
+                            <font color="#FFFFFF" face="Comic Sans MS" size="2"><b>*** CLUB SHOUTBOX ***</b></font>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div id="shoutboxMessages" style="height: 180px; overflow-y: auto; background-color: #050505; border: 1px solid #00FF00; padding: 5px; font-family: 'Courier New', monospace; font-size: 12px;">
+                                <font color="#888">Loading shouts...</font>
+                            </div>
+                            <br>
+                            <form name="shoutForm" onsubmit="postShout(event)">
+                                <input type="text" name="shoutText" placeholder="Type message..." required style="width: 95%; background-color: #111; color: #00FF00; border: 1px solid #00FF00; padding: 3px;"><br><br>
+                                <input type="submit" value="SHOUT!" style="background-color: #00FF00; color: #000; font-weight: bold; cursor: pointer; width: 100%;">
+                            </form>
+                        </td>
+                    </tr>
+                </table>
+
+                <br><hr color="#FF00FF"><br>
+
+                <font face="Times New Roman" color="#FFFFFF">
+                    <h3><b><u>MEMBER NAV</u></b></h3>
+                    <ul>
+                        <li><a href="home_logged_in.html">Secret Dashboard</a></li>
+                        <li><a href="about.html">About Me</a></li>
+                        <li><a href="gallery.html?access=pro">Exclusive Gallery</a></li>
+                        <li><a href="games.html">Games</a></li>
+                    </ul>
+                </font>
+            </td>
+
+            <td width="70%" valign="top">
+                <h2><font color="#00FFFF" face="Comic Sans MS" id="welcomeMsg">WELCOME, MEMBER!</font></h2>
+                <hr color="#00FF00">
+
+                <table border="3" bgcolor="#000000" width="100%" cellpadding="8" bordercolor="#FF00FF" style="margin-bottom: 20px;">
+                    <tr>
+                        <td align="center" bgcolor="#800080" colspan="2">
+                            <font color="#FFFF00" face="Comic Sans MS" size="3"><b>*** AKENNO HEAD CLICKER ARENA ***</b></font>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td width="40%" align="center" valign="middle" bgcolor="#050505">
+                            <font color="#00FF00" face="Courier New" size="2"><b>CLICK THE HEAD!</b></font><br><br>
+                            <img id="akennoHead" src="pic5.png" onclick="clickHead()" style="width: 120px; height: 120px; border-radius: 50%; border: 3px solid #FF00FF; cursor: pointer; transition: transform 0.1s ease; object-fit: cover;" alt="Akenno's Head">
+                        </td>
+                        <td width="60%" valign="top" bgcolor="#050505">
+                            <font color="#00FFFF" face="Comic Sans MS" size="2"><b>TOP HEAD CLICKERS</b></font>
+                            <table border="1" bordercolor="#333" width="100%" cellpadding="4" style="margin-top: 5px; font-family: 'Courier New', monospace; font-size: 12px;">
+                                <thead>
+                                    <tr bgcolor="#111">
+                                        <th width="15%"><font color="#FF00FF">#</font></th>
+                                        <th align="left"><font color="#00FFFF">USER</font></th>
+                                        <th align="right"><font color="#00FF00">CLICKS</font></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="leaderboardEntries">
+                                    <tr><td colspan="3" align="center">Loading scores...</td></tr>
+                                </tbody>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+                <center><font face="Papyrus" color="yellow">I'm aware it's glitchy, but its still works so what...</font></center>
+                <hr color="#00FF00"><br>
+
+                <h2><font color="#FF00FF" face="Comic Sans MS">LIVE CLUB BROADCASTS</font></h2>
+                <div id="announcementFeed">
+                    <font color="#FFFFFF">Loading system broadcasts...</font>
+                </div>
+
+                <br><hr color="#00FF00"><br>
+
+                <h2><font color="yellow">TOP SECRET CONTENT</font></h2>
+                <center><img src="pic3.png" style="max-width: 75%; height: auto;" alt="VIP Content"></center>
+                <br>
+                <center><img src="underconstruction.gif" alt="Under Construction"></center>
+            </td>
+        </tr>
+    </table>
+
+    <br><br>
+
+    <center>
+        <hr size="3" color="#FF00FF" width="50%">
+        <font color="#FFFFFF" size="2">
+            VIP SESSION ACTIVE<br>
+            <i>Copyright &copy; 2026 Club Akenno. All Rights Reserved.</i>
+            <br>
+            <i>Contact: clubakenno@aol.com</i>
+        </font>
+    </center>
+
+</body>
+</html>
