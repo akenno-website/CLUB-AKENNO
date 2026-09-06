@@ -47,6 +47,13 @@
             }
         }
 
+        // Announcements are allowed raw HTML (buttons, links, etc) since
+        // only the admin can post them — see the admin gate on
+        // postAnnouncement/deleteAnnouncement below. This is intentionally
+        // NOT applied to shoutbox/leaderboard, which take input from any
+        // member and stay escaped.
+        const REACTION_EMOJIS = ["🔥", "💜", "👽", "😂"];
+
         // -------------------------------------------------------------
         // ADMIN IDENTIFIERS
         // -------------------------------------------------------------
@@ -102,6 +109,7 @@
         // -------------------------------------------------------------
         window.postAnnouncement = async function (event) {
             event.preventDefault();
+            if (!isUserAdminGlobal) return; // real gate belongs in Firestore rules — see note above
             const text = document.forms["announcementForm"]["announceText"].value.trim();
             const imgUrl = document.forms["announcementForm"]["announceImg"].value.trim();
             const currentUser = auth.currentUser;
@@ -112,6 +120,7 @@
                     author: currentUser.displayName || currentUser.email,
                     text: text,
                     imageUrl: sanitizeImageUrl(imgUrl),
+                    reactions: {},
                     timestamp: serverTimestamp()
                 });
 
@@ -119,6 +128,23 @@
                 document.forms["announcementForm"].reset();
             } catch (err) {
                 alert("BROADCAST ERROR: " + err.message);
+            }
+        };
+
+        // One click = +1 to that emoji's count. Not tracking per-user
+        // which emoji they already picked, so people can spam a reaction
+        // repeatedly — same trust model as the shoutbox. If you want
+        // "one reaction per user" later, store it on a
+        // reactions/{docId}_{uid} doc instead of a bare counter.
+        window.reactToAnnouncement = async function (docId, emoji) {
+            const currentUser = auth.currentUser;
+            if (!currentUser) return;
+            try {
+                await setDoc(doc(db, "announcements", docId), {
+                    reactions: { [emoji]: increment(1) }
+                }, { merge: true });
+            } catch (err) {
+                console.error("Reaction error:", err);
             }
         };
 
@@ -148,15 +174,19 @@
                 snapshot.forEach((docSnap) => {
                     const data = docSnap.data();
                     const docId = docSnap.id;
-                    const safeAuthor = escapeHtml(data.author || "ADMIN");
-                    const safeText = escapeHtml(data.text || "");
+                    // Announcements are admin-only content (see postAnnouncement
+                    // gate) so they're rendered raw — you can drop <a> and
+                    // <button> tags straight into the message box.
+                    const author = data.author || "ADMIN";
+                    const text = data.text || "";
                     const safeImg = sanitizeImageUrl(data.imageUrl);
+                    const reactions = data.reactions || {};
 
                     let card = `<table border="2" width="100%" bgcolor="#000000" cellpadding="8" style="margin-bottom: 15px;">
                         <tr>
                             <td bgcolor="#800080" style="display: flex; justify-content: space-between; align-items: center;">
                                 <font color="#FFFF00" face="Courier New" size="2">
-                                    <b>[BROADCAST FROM: ${safeAuthor}]</b>
+                                    <b>[BROADCAST FROM: ${author}]</b>
                                 </font>`;
 
                     if (isUserAdminGlobal) {
@@ -167,11 +197,18 @@
                         </tr>
                         <tr>
                             <td>
-                                <font color="#00FF00" face="Arial" size="3"><p>${safeText}</p></font>`;
+                                <font color="#00FF00" face="Arial" size="3"><p>${text}</p></font>`;
 
                     if (safeImg) {
                         card += `<center><img src="${safeImg}" style="max-width: 80%; height: auto; border: 2px solid #FF00FF; margin-top: 5px;"></center>`;
                     }
+
+                    card += `<div style="margin-top: 8px;">`;
+                    REACTION_EMOJIS.forEach((emoji) => {
+                        const count = reactions[emoji] || 0;
+                        card += `<button onclick="reactToAnnouncement('${docId}', '${emoji}')" style="background-color: #111; color: #FFF; border: 1px solid #555; margin-right: 6px; cursor: pointer; font-size: 14px; padding: 2px 8px;">${emoji} <span style="color:#0FF">${count}</span></button>`;
+                    });
+                    card += `</div>`;
 
                     card += `</td></tr></table>`;
                     feedContainer.innerHTML += card;
