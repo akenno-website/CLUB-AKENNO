@@ -6,7 +6,20 @@
     <title>*** WELCOME TO CLUB AKENNO - OFFICIAL SITE ***</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <script type="module">
-        // Import Firebase & App modules here
+        import { auth, handleLogout, escapeHtml } from "./auth.js";
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        onAuthStateChanged(auth, (user) => {
+            const el = document.getElementById("authStatus");
+            if (user) {
+                const name = escapeHtml(user.displayName || user.email);
+                el.innerHTML = `<font color="#00FF00">Logged in as:<br><b>${name}</b></font><br><br>
+                    <button id="logoutBtn" style="background-color:#800000; color:#FFF; font-weight:bold; cursor:pointer;">LOGOUT</button>`;
+                document.getElementById("logoutBtn").addEventListener("click", handleLogout);
+            } else {
+                el.innerHTML = `<font color="#FF0000">Not logged in.</font> <a href="index.html"><font color="#FFFF00">Login</font></a>`;
+            }
+        });
     </script>
 
     <style>
@@ -51,6 +64,10 @@
                         <li><a href="about.html">About Me</a></li>
                         <li><a href="gallery.html">Gallery</a></li>
                     </ul>
+
+                    <div id="authStatus" style="font-family: 'Courier New', monospace; font-size: 12px; margin: 10px 0;">
+                        <font color="#888">Checking login status...</font>
+                    </div>
 
                     <center>
                         <img src="pic1.png" alt="Sidebar Image 1" class="sidebar-img">

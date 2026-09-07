@@ -3,6 +3,22 @@
 <head>
     <title>*** CLUB AKENNO - MEDIA GALLERY ***</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <script type="module">
+        import { auth, handleLogout, escapeHtml } from "./auth.js";
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        onAuthStateChanged(auth, (user) => {
+            const el = document.getElementById("authStatus");
+            if (user) {
+                const name = escapeHtml(user.displayName || user.email);
+                el.innerHTML = `<font color="#00FF00">Logged in as:<br><b>${name}</b></font><br><br>
+                    <button id="logoutBtn" style="background-color:#800000; color:#FFF; font-weight:bold; cursor:pointer;">LOGOUT</button>`;
+                document.getElementById("logoutBtn").addEventListener("click", handleLogout);
+            } else {
+                el.innerHTML = `<font color="#FF0000">Not logged in.</font> <a href="index.html"><font color="#FFFF00">Login</font></a>`;
+            }
+        });
+    </script>
     <script>
         // =========================================================
         // ADD ALL YOUR PHOTOS HERE IN ONE PLACE!
@@ -83,6 +99,11 @@
                         <li><a href="games.html">Games</a></li>
                     </ul>
                 </font>
+
+                <div id="authStatus" style="font-family: 'Courier New', monospace; font-size: 12px; margin: 10px 0;">
+                    <font color="#888">Checking login status...</font>
+                </div>
+
                 <br><hr color="#FF00FF"><br>
                 <center>
                     <img src="pic1.png" style="max-width: 75%; height: auto;"><br><br>

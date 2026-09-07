@@ -1,206 +1,157 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>*** ABOUT - CLUB AKENNO ***</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>*** WELCOME TO CLUB AKENNO - OFFICIAL SITE ***</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <script type="module">
+        import { auth, handleLogout, escapeHtml } from "./auth.js";
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        onAuthStateChanged(auth, (user) => {
+            const el = document.getElementById("authStatus");
+            if (user) {
+                const name = escapeHtml(user.displayName || user.email);
+                el.innerHTML = `<font color="#00FF00">Logged in as:<br><b>${name}</b></font><br><br>
+                    <button id="logoutBtn" style="background-color:#800000; color:#FFF; font-weight:bold; cursor:pointer;">LOGOUT</button>`;
+                document.getElementById("logoutBtn").addEventListener("click", handleLogout);
+            } else {
+                el.innerHTML = `<font color="#FF0000">Not logged in.</font> <a href="index.html"><font color="#FFFF00">Login</font></a>`;
+            }
+        });
+    </script>
+
+    <style>
+        body {
+            background-color: #000000;
+            background-image: url('pic6.jpeg');
+            color: #00FF00;
+            font-family: Arial, sans-serif;
+        }
+        a:link { color: #FF00FF; }
+        a:visited { color: #00FFFF; }
+        .sidebar-img { max-width: 75%; height: auto; display: block; margin: 10px 0; }
+        .main-img { max-width: 75%; height: auto; display: block; margin: 0 auto; }
+    </style>
 </head>
 <body bgcolor="#000000" text="#00FF00" link="#FF00FF" vlink="#00FFFF" background="https://www.transparenttextures.com/patterns/stardust.png">
 
-    <style>
-        .gilded-frame {
-            padding: 16px;
-            background: #222; /* Inner mat/background */
-            width: 300px;
-            height: 400px;
-            box-sizing: border-box;
-            
-            /* Gilded border effect */
-            border: 12px solid transparent;
-            background: 
-                linear-gradient(#fff, #fff) padding-box,
-                linear-gradient(135deg, 
-                #d4af37 0%, 
-                #fff8dc 25%, 
-                #aa771c 50%, 
-                #ffd700 75%, 
-                #8b6508 100%
-                ) border-box;
-                
-            box-shadow: 
-                0 0 0 2px #5c4033, /* Deep inner dark edge */
-                0 10px 20px rgba(0, 0, 0, 0.5); /* Outer drop shadow */
-            }
-    </style>
+    <!-- HEADER / BANNER -->
     <center>
         <font size="6" face="Comic Sans MS, Arial" color="#FFFF00">
-            <b>ABOUT CLUB AKENNO</b>
+            <b>WELCOME TO THE OFFICIAL AKENNO GAMES</b>
         </font>
-        <br>
-        <font color="#00FFFF" size="3" face="Comic Sans MS">
-            <i>*** THE MOST EXCLUSIVE SECRET HQ ON THE ENTIRE WEB ***</i>
-        </font>
+        <br><br>
+        <marquee scrollamount="8" width="80%">
+            <font color="#FF0000"><b>*** HI WELCOME TO THE GAMES PAGE ***</b></font>
+        </marquee>
     </center>
 
     <hr size="5" color="#FF00FF">
 
+    <!-- MAIN TWO-COLUMN CONTAINER -->
     <table border="5" cellpadding="10" cellspacing="5" width="90%" align="center" bgcolor="#000033">
         <tr>
+            <!-- LEFT SIDEBAR -->
             <td width="30%" valign="top" bgcolor="#111111">
+
+                <!-- NAVIGATION & SIDEBAR IMAGES -->
                 <font face="Times New Roman" color="#FFFFFF">
                     <h3><b><u>NAVIGATION</u></b></h3>
                     <ul>
-                        <li><a href="index.html">Home / Login</a></li>
-                        <li><a href="gallery.html">Media Gallery</a></li>
-                        <li><a href="games.html">Games</a></li>
+                        <li><a href="index.html">Home</a></li>
+                        <li><a href="about.html">About Me</a></li>
+                        <li><a href="gallery.html">Gallery</a></li>
                     </ul>
-                    
-                    <hr color="#FF00FF">    
-                    
-                    <center>
-                        <font size="2" color="#FFFF00" face="Comic Sans MS">
-                            <b>HQ FEATURES:</b>
-                        </font>
-                        <ul align="left">
-                            <li>Live Broadcasts</li>
-                            <li>Akenno Head Clicker Arena</li>
-                            <li>Shoutbox Chat</li>
-                            <li>Top Secret Content</li>
-                        </ul>
 
-                        <img src="pic1.png" style="max-width: 75%; height: auto;">
-                        <img src="pic2.jpg" style="max-width: 75%; height: auto;">
+                    <div id="authStatus" style="font-family: 'Courier New', monospace; font-size: 12px; margin: 10px 0;">
+                        <font color="#888">Checking login status...</font>
+                    </div>
+
+                    <center>
+                        <img src="pic1.png" alt="Sidebar Image 1" class="sidebar-img">
+                        <img src="pic2.jpg" alt="Sidebar Image 2" class="sidebar-img">
+                    </center>
+
+                    <br>
+                    <center>
+                        <font size="2" color="yellow">BEST VIEWED IN<br>NETSCAPE NAVIGATOR 4.0</font>
                     </center>
                 </font>
             </td>
 
+            <!-- RIGHT MAIN CONTENT AREA -->
             <td width="70%" valign="top">
-                <h2><font color="#00FFFF" face="Comic Sans MS">Welcome to the Official Club HQ!</font></h2>
+                <h2><font color="#00FFFF" face="Comic Sans MS">WASSUP!!</font></h2>
                 <p>
-                    Club Akenno was founded by <strike>two</strike>(one) people with a <strike>crazy</strike>(sane) idea, and a
-                     mutual obsession with making the perfect <strike>burger</strike>(website). Unsatisfied with the status quo,
-                     we quit our corporate deskjobs, to disrupt the local burger scene.
-                </p>
-                <center>
-                <img src="pic7.webp" alt="cool" style="max-width: 50%; height: auto;" class="gilded-frame">
-                <p>Picture of me</p>
-                </center>
-                
-                <p>
-                    <font color="#FFFF00"><b>A NOTE TO PREVIOUS MEMBERS:</b></font> 
-                    IM SORRY FOR THE GFORMS USERS THAT LOST THEIR ACCOUNTS, PLEASE JUST MAKE A NEW ONE SORRY. 
-                    We are currently migrating database systems to keep the site as secure as possible.
+                    THE MOST BADDEST RADDEST MOST TUBULAR GAMES IN THE WHOLE INTERNET, THESE ARENT YOUR GRANNY'S GAMES!!! THEYRE THE MOST EXTREME GNARLY GAMES EVER
                 </p>
 
                 <hr color="#00FF00">
 
-                <h3><font color="#FF00FF">Official Club Rules:</font></h3>
-                <ol>
-                    <li>You do not talk about Club Akenno.</li>
-                    <li>You <b>DO NOT</b> talk about Club Akenno.</li>
-                    <li>Respect the Head Clicker Arena Leaderboard rankings.</li>
-                    <li>No sweats allowed in the shoutbox unless posting raw potatoes.</li>
-                    <li>Whatever happens in the Live Broadcasts stays in the Live Broadcasts.</li>
-                </ol>
-
-                <hr color="#00FF00">
-
-                <h3><font color="#00FFFF" face="Comic Sans MS">Site Notices & Warnings:</font></h3>
-                <p>
-                    <b>[ HEAD CLICKER ARENA NOTICE ]</b><br>
-                   If you think i'm being unfair with my "infinite" points, I'm not it's fair 100%.
-                </p>
-
-                <hr color="#00FF00">
-
-                <h3><font color="#00FFFF" face="Comic Sans MS">Frequently Asked Questions (Q&A):</font></h3>
-                
-                <p>
-                    <font color="#FFFF00"><b>Q: What is Club Akenno and who allowed you to make this?</b></font><br>
-                    <font color="#FFFFFF">A: This is my fan club and elite in-group, I made it myself :)</font>
-                </p>
-
-                <p>
-                    <font color="#FFFF00"><b>Q: How do I become an official "authorized" member?</b></font><br>
-                    <font color="#FFFFFF">A: Just sign up from the home page, all you need is a valid email.</font>
-                </p>
-
-                <p>
-                    <font color="#FFFF00"><b>Q: Why isn't the first rule of Club Akenno being followed on this page?</b></font><br>
-                    <font color="#FFFFFF">A: Screw the rules.</font>
-                </p>
-
-                <p>
-                    <font color="#FFFF00"><b>Q: Is this site safe from my parents / teachers / anti-virus software?</b></font><br>
-                    <font color="#FFFFFF">A: Most likely? It's just a web 2 app.</font>
-                </p>
-
-                <p>
-                    <font color="#FFFF00"><b>Q: I signed up via the old Google Form and lost my account, can I get my points back?</b></font><br>
-                    <font color="#FFFFFF">A: NO.</font>
-                </p>
-
-                <p>
-                    <font color="#FFFF00"><b>Q: Why isn't the guest / guest login working for me?</b></font><br>
-                    <font color="#FFFFFF">A: Oh yeah guest:guest is broken, I just never bothered to remove it.</font>
-                </p>
-
-                <p>
-                    <font color="#FFFF00"><b>Q: My web browser says this site looks like it was built in 1999. Is that a glitch?</b></font><br>
-                    <font color="#FFFFFF">A: Working as intended.</font>
-                </p>
-
-                <p>
-                    <font color="#FFFF00"><b>Q: How come Akenno has infinite points on the Head Clicker Arena leaderboard? Is that cheating?</b></font><br>
-                    <font color="#FFFFFF">A: DEAL WITH IT.</font>
-                </p>
-
-                <p>
-                    <font color="#FFFF00"><b>Q: What happens if I beat Akenno's score?</b></font><br>
-                    <font color="#FFFFFF">A: You will be promoted and the club is renamed to CLUB [YOU].</font>
-                </p>
-
-                <p>
-                    <font color="#FFFF00"><b>Q: Is there an autoclicker ban policy in effect?</b></font><br>
-                    <font color="#FFFFFF">A: No, but autoclickers waste my money.</font>
-                </p>
-
-                <p>
-                    <font color="#FFFF00"><b>Q: What happens if I post a cooked potato instead of a raw potato in the shoutbox?</b></font><br>
-                    <font color="#FFFFFF">A: Immediate ban.</font>
-                </p>
-
-                <p>
-                    <font color="#FFFF00"><b>Q: Where can I watch the Live Broadcasts, and what time do they start?</b></font><br>
-                    <font color="#FFFFFF">A: What??</font>
-                </p>
+                <br>
 
                 <center>
-                    <table border="2" bordercolor="#FF00FF" bgcolor="#000000" cellpadding="5">
-                        <tr>
-                            <td align="center">
-                                <font color="#FFFF00" face="Courier New">
-                                    <b>PUBLIC DEMO ACCESS:</b><br>
-                                </font>
-                                <small style="color:#00FF00;">
-                                    user: guest <br> 
-                                    password: guest
-                                </small>
-                            </td>
-                        </tr>
-                    </table>
+                    <h2><font color="yellow">GAMES GAMES GAMES!!! GALORE!!!</font></h2>
                 </center>
+                
+                
+                <center>
+                    <img src="pic6.jpeg" alt="Main Picture" class="main-img">
+                </center>
+
+                <br>
+                   <center>
+                    <hr color="FF00FF">
+
+                    <a href="snake.html">
+                    <button>
+                    <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQWzCD0VbsY3XgBnv5ArC_uMzz2ubMETpg57kRtrDfWRA&s=10" style="max-width: 50%; height: auto;">
+                    <br>SNAKE GAME
+                    </button>
+                    </a>   
+
+                    </center>
+
+                    <br>
+                    <center>
+                    <a href="job-application-form.pdf">
+                    <button>
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/f/fc/Valorant_logo_-_pink_color_version.svg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original" style="max-width: 50%; height: auto;">
+                    <br>VALORANT
+                    </button>
+                    </a>   
+                    </center>
+                
+                <br>
+                <center>
+                    <img src="underconstruction.gif" alt="Under Construction" style="max-width: 50%; height: auto;">
+                </center>
+
+                <br>
             </td>
         </tr>
     </table>
 
-    <br>
+    <br><br>
 
+    <!-- FOOTER -->
     <center>
+        <hr size="3" color="#FF00FF" width="50%">
         <font color="#FFFFFF" size="2">
+            VISITOR COUNTER:<br>
+            <table border="1" bgcolor="#000000" cellpadding="3">
+                <tr>
+                    <td><font color="#00FF00" face="Courier"><b>000001</b></font></td>
+                </tr>
+            </table>
+            <br>
             <i>Copyright &copy; 2026 Club Akenno. All Rights Reserved.</i>
             <br>
             <i>Contact: clubakenno@aol.com</i>
         </font>
     </center>
+
 </body>
 </html>
