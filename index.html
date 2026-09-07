@@ -4,10 +4,30 @@
     <title>*** WELCOME TO CLUB AKENNO - OFFICIAL SITE ***</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <script type="module">
-        import { handleLogin, handleRegister } from "./auth.js";
+        import { auth, handleLogin, handleRegister, handleLogout } from "./auth.js";
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
         document.forms["loginForm"].addEventListener("submit", handleLogin);
         document.forms["registerForm"].addEventListener("submit", handleRegister);
+        document.getElementById("logoutBtn").addEventListener("click", handleLogout);
+
+        // Show the login/signup panel to signed-out visitors, or a welcome
+        // banner with the remembered username to anyone already logged in
+        // (persisted session — see the setPersistence call in auth.js).
+        onAuthStateChanged(auth, (user) => {
+            const authPanel = document.getElementById("authPanel");
+            const loggedInPanel = document.getElementById("loggedInPanel");
+
+            if (user) {
+                const displayName = user.displayName || user.email;
+                document.getElementById("loggedInUsername").textContent = displayName;
+                authPanel.style.display = "none";
+                loggedInPanel.style.display = "block";
+            } else {
+                authPanel.style.display = "block";
+                loggedInPanel.style.display = "none";
+            }
+        });
     </script>
 </head>
 <body bgcolor="#000000" text="#00FF00" link="#FF00FF" vlink="#00FFFF" background="https://www.transparenttextures.com/patterns/stardust.png">
@@ -33,51 +53,75 @@
         <tr>
             <td width="30%" valign="top" bgcolor="#111111">
 
-                <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
-                    <tr>
-                        <td align="center" bgcolor="#000080">
-                            <font color="#FFFFFF" face="Arial" size="2"><b>[ MEMBER LOGIN ]</b></font>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>
-                            <form name="loginForm">
-                                <font face="Courier New" size="2" color="#00FF00">
-                                    USERNAME OR EMAIL:<br>
-                                    <input type="text" name="usernameOrEmail" size="15" required><br><br>
-                                    PASSWORD:<br>
-                                    <input type="password" name="password" size="15" required><br><br>
-                                    <input type="submit" value="LOGIN">
-                                </font>
-                            </form>
-                        </td>
-                    </tr>
-                </table>
+                <div id="authPanel" style="display: none;">
+                    <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
+                        <tr>
+                            <td align="center" bgcolor="#000080">
+                                <font color="#FFFFFF" face="Arial" size="2"><b>[ MEMBER LOGIN ]</b></font>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <form name="loginForm">
+                                    <font face="Courier New" size="2" color="#00FF00">
+                                        USERNAME OR EMAIL:<br>
+                                        <input type="text" name="usernameOrEmail" size="15" required><br><br>
+                                        PASSWORD:<br>
+                                        <input type="password" name="password" size="15" required><br><br>
+                                        <input type="submit" value="LOGIN">
+                                    </font>
+                                </form>
+                            </td>
+                        </tr>
+                    </table>
 
-                <br><hr color="#FF00FF"><br>
+                    <br><hr color="#FF00FF"><br>
 
-                <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
-                    <tr>
-                        <td align="center" bgcolor="#800000">
-                            <font color="#FFFFFF" face="Arial" size="2"><b>[ NEW MEMBER SIGNUP ]</b></font>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>
-                            <form name="registerForm">
+                    <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
+                        <tr>
+                            <td align="center" bgcolor="#800000">
+                                <font color="#FFFFFF" face="Arial" size="2"><b>[ NEW MEMBER SIGNUP ]</b></font>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <form name="registerForm">
+                                    <font face="Courier New" size="2" color="#00FF00">
+                                        USERNAME:<br>
+                                        <input type="text" name="regUsername" size="15" required><br><br>
+                                        EMAIL:<br>
+                                        <input type="email" name="regEmail" size="15" required><br><br>
+                                        PASSWORD:<br>
+                                        <input type="password" name="regPassword" size="15" required><br><br>
+                                        <input type="submit" value="REGISTER">
+                                    </font>
+                                </form>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div id="loggedInPanel" style="display: none;">
+                    <table border="2" bgcolor="#000000" width="100%" cellpadding="5">
+                        <tr>
+                            <td align="center" bgcolor="#008000">
+                                <font color="#FFFFFF" face="Arial" size="2"><b>[ WELCOME BACK ]</b></font>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td align="center">
                                 <font face="Courier New" size="2" color="#00FF00">
-                                    USERNAME:<br>
-                                    <input type="text" name="regUsername" size="15" required><br><br>
-                                    EMAIL:<br>
-                                    <input type="email" name="regEmail" size="15" required><br><br>
-                                    PASSWORD:<br>
-                                    <input type="password" name="regPassword" size="15" required><br><br>
-                                    <input type="submit" value="REGISTER">
+                                    LOGGED IN AS:<br>
+                                    <b><font color="#FFFF00" id="loggedInUsername">MEMBER</font></b>
+                                    <br><br>
+                                    <a href="home_logged_in.html"><font color="#00FFFF"><b>[ ENTER MEMBERS AREA ]</b></font></a>
+                                    <br><br>
+                                    <button id="logoutBtn" style="background-color: #800000; color: #FFFFFF; font-weight: bold; cursor: pointer;">LOGOUT</button>
                                 </font>
-                            </form>
-                        </td>
-                    </tr>
-                </table>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
 
                 <br><hr color="#FF00FF"><br>
 

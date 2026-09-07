@@ -8,7 +8,9 @@ import {
     createUserWithEmailAndPassword,
     updateProfile,
     onAuthStateChanged,
-    signOut
+    signOut,
+    setPersistence,
+    browserLocalPersistence
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import {
     getFirestore,
@@ -30,6 +32,16 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// "Remember me" — keeps the session in the browser's local storage so the
+// user stays logged in across page loads, tabs, and browser restarts,
+// instead of only for the current tab (browserSessionPersistence) or not
+// at all (inMemoryPersistence). This is Firebase's default on web anyway,
+// but setting it explicitly makes the intent clear and protects against it
+// ever being changed accidentally.
+setPersistence(auth, browserLocalPersistence).catch((err) => {
+    console.error("Persistence setup error:", err);
+});
 
 onAuthStateChanged(auth, (user) => {
     if (user) {
