@@ -24,6 +24,33 @@
             }
         }
 
+        // --- Extracts a YouTube video ID from watch/short/embed/share links ---
+        function extractYouTubeId(url) {
+            if (!url) return "";
+            try {
+                const parsed = new URL(url.trim());
+                const host = parsed.hostname.replace(/^www\./, "");
+
+                if (host === "youtu.be") {
+                    return parsed.pathname.slice(1).split("/")[0] || "";
+                }
+                if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com") {
+                    if (parsed.pathname === "/watch") {
+                        return parsed.searchParams.get("v") || "";
+                    }
+                    if (parsed.pathname.startsWith("/embed/")) {
+                        return parsed.pathname.split("/embed/")[1].split("/")[0] || "";
+                    }
+                    if (parsed.pathname.startsWith("/shorts/")) {
+                        return parsed.pathname.split("/shorts/")[1].split("/")[0] || "";
+                    }
+                }
+                return "";
+            } catch {
+                return "";
+            }
+        }
+
         const REACTION_EMOJIS = ["❤️", "😆", "😢", "😡","🎄"];
 
         const ADMIN_EMAILS = ["akennmasangkay@gmail.com"];
@@ -32,6 +59,55 @@
         let unsubAnnouncements = null;
         let unsubShoutbox = null;
         let unsubLeaderboard = null;
+        let unsubMusicPlayer = null;
+
+        // --- Global music player state ---
+        let ytPlayer = null;
+        let ytPlayerReady = false;
+        let pendingVideoLoad = null;
+        let pendingShouldUnmute = false;
+        let latestMusicSettings = null;
+        let musicTunedIn = false; // per-visit choice — nobody is opted in until they click "TUNE IN"
+
+        // Load the YouTube IFrame API as soon as the page loads, regardless
+        // of auth state, so it's ready the moment we need it.
+        (function loadYouTubeAPI() {
+            const tag = document.createElement("script");
+            tag.src = "https://www.youtube.com/iframe_api";
+            document.head.appendChild(tag);
+        })();
+
+        window.onYouTubeIframeAPIReady = function () {
+            ytPlayer = new YT.Player("ytPlayerDiv", {
+                height: "0",
+                width: "0",
+                videoId: "",
+                playerVars: {
+                    autoplay: 0,
+                    mute: 1,
+                    controls: 0,
+                    disablekb: 1,
+                    modestbranding: 1,
+                    playsinline: 1
+                },
+                events: {
+                    onReady: () => {
+                        ytPlayerReady = true;
+                        if (pendingVideoLoad) {
+                            ytPlayer.loadVideoById(pendingVideoLoad);
+                            if (pendingShouldUnmute) {
+                                ytPlayer.unMute();
+                                const btn = document.getElementById("musicMuteBtn");
+                                if (btn) btn.innerText = "🔊 MUTE";
+                            }
+                            ytPlayer.playVideo();
+                            pendingVideoLoad = null;
+                            pendingShouldUnmute = false;
+                        }
+                    }
+                }
+            });
+        };
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
@@ -44,18 +120,22 @@
                 );
 
                 document.getElementById("adminPanel").style.display = isUserAdminGlobal ? "block" : "none";
+                document.getElementById("adminMusicPanel").style.display = isUserAdminGlobal ? "block" : "none";
 
                 if (unsubAnnouncements) unsubAnnouncements();
                 if (unsubShoutbox) unsubShoutbox();
                 if (unsubLeaderboard) unsubLeaderboard();
+                if (unsubMusicPlayer) unsubMusicPlayer();
 
                 unsubAnnouncements = listenToAnnouncements();
                 unsubShoutbox = listenToShoutbox();
                 unsubLeaderboard = listenToLeaderboard();
+                unsubMusicPlayer = listenToMusicPlayer();
             } else {
                 if (unsubAnnouncements) unsubAnnouncements();
                 if (unsubShoutbox) unsubShoutbox();
                 if (unsubLeaderboard) unsubLeaderboard();
+                if (unsubMusicPlayer) unsubMusicPlayer();
                 alert("RESTRICTED AREA: You must be logged in to view this page.");
                 window.location.href = "index.html";
             }
@@ -316,6 +396,140 @@
             });
         }
 
+        // --- Global music player: admin sets a YouTube URL + on/off state,
+        // every logged-in member sees the same doc via onSnapshot and loads
+        // the same video, roughly seeked to the same position based on the
+        // server timestamp of when it was set. ---
+
+        window.updateMusicPlayer = async function (event) {
+            event.preventDefault();
+            if (!isUserAdminGlobal) return;
+
+            const url = document.forms["musicForm"]["musicUrl"].value.trim();
+            const title = document.forms["musicForm"]["musicTitle"].value.trim();
+            const enabled = document.forms["musicForm"]["musicEnabled"].checked;
+            const currentUser = auth.currentUser;
+            if (!currentUser) return;
+
+            const videoId = extractYouTubeId(url);
+            if (enabled && !videoId) {
+                alert("Enter a valid YouTube URL (watch, youtu.be, or shorts link).");
+                return;
+            }
+
+            try {
+                await setDoc(doc(db, "settings", "musicPlayer"), {
+                    enabled: enabled,
+                    videoId: videoId || "",
+                    title: title || "",
+                    startedAt: serverTimestamp(),
+                    updatedBy: currentUser.email
+                });
+                alert(enabled ? "GLOBAL MUSIC PLAYER UPDATED FOR ALL MEMBERS!" : "GLOBAL MUSIC PLAYER TURNED OFF FOR ALL MEMBERS.");
+            } catch (err) {
+                alert("MUSIC UPDATE ERROR: " + err.message);
+            }
+        };
+
+        window.toggleMusicMute = function () {
+            if (!ytPlayer || !ytPlayerReady) return;
+            const btn = document.getElementById("musicMuteBtn");
+            if (ytPlayer.isMuted()) {
+                ytPlayer.unMute();
+                btn.innerText = "🔊 MUTE";
+            } else {
+                ytPlayer.mute();
+                btn.innerText = "🔇 UNMUTE";
+            }
+        };
+
+        // User opts in — this is the only place playback actually starts
+        // and audio gets unmuted, since that has to happen on a real click
+        // (browsers block unmuted autoplay, and nobody should be opted into
+        // audio without asking).
+        window.tuneInToMusic = function () {
+            musicTunedIn = true;
+            document.getElementById("musicTuneInPrompt").style.display = "none";
+            document.getElementById("musicNowPlaying").style.display = "block";
+            loadCurrentTrack(true);
+        };
+
+        window.leaveMusicPlayer = function () {
+            musicTunedIn = false;
+            document.getElementById("musicNowPlaying").style.display = "none";
+            document.getElementById("musicTuneInPrompt").style.display = "block";
+            if (ytPlayerReady && ytPlayer && ytPlayer.pauseVideo) {
+                ytPlayer.pauseVideo();
+            }
+        };
+
+        function loadCurrentTrack(shouldUnmute) {
+            const data = latestMusicSettings;
+            if (!data || !data.enabled || !data.videoId) return;
+
+            const elapsedSeconds = data.startedAt ? (Date.now() - data.startedAt.toMillis()) / 1000 : 0;
+            const loadParams = { videoId: data.videoId, startSeconds: Math.max(0, elapsedSeconds) };
+
+            if (!ytPlayerReady) {
+                pendingVideoLoad = loadParams;
+                pendingShouldUnmute = shouldUnmute;
+                return;
+            }
+
+            const nowPlaying = ytPlayer.getVideoData ? ytPlayer.getVideoData().video_id : null;
+            if (nowPlaying !== data.videoId) {
+                ytPlayer.loadVideoById(loadParams);
+            }
+            if (shouldUnmute) {
+                ytPlayer.unMute();
+                const btn = document.getElementById("musicMuteBtn");
+                if (btn) btn.innerText = "🔊 MUTE";
+            }
+            ytPlayer.playVideo();
+        }
+
+        function applyMusicSettings(data) {
+            const widget = document.getElementById("musicPlayerWidget");
+            latestMusicSettings = data;
+
+            if (!data || !data.enabled || !data.videoId) {
+                widget.style.display = "none";
+                musicTunedIn = false;
+                document.getElementById("musicTuneInPrompt").style.display = "block";
+                document.getElementById("musicNowPlaying").style.display = "none";
+                if (ytPlayerReady && ytPlayer && ytPlayer.pauseVideo) {
+                    ytPlayer.pauseVideo();
+                }
+                return;
+            }
+
+            widget.style.display = "block";
+            document.getElementById("musicTitle").innerText = data.title || "NOW PLAYING";
+
+            if (musicTunedIn) {
+                // Already opted in — follow the admin to whatever track
+                // changed to, but don't touch their current mute choice.
+                loadCurrentTrack(false);
+            }
+            // Otherwise just leave the "TUNE IN" prompt showing; nothing
+            // loads or plays until they click it.
+        }
+
+        function listenToMusicPlayer() {
+            const ref = doc(db, "settings", "musicPlayer");
+            return onSnapshot(ref, (snap) => {
+                const data = snap.exists() ? snap.data() : null;
+                latestMusicSettings = data;
+                applyMusicSettings(data);
+
+                // Pre-fill the admin form with the current state so it's
+                // obvious what's live right now.
+                if (isUserAdminGlobal && document.forms["musicForm"]) {
+                    document.forms["musicForm"]["musicEnabled"].checked = !!(data && data.enabled);
+                }
+            });
+        }
+
         window.handleLogout = handleLogout;
     </script>
 </head>
@@ -371,6 +585,31 @@
                                         IMAGE URL (OPTIONAL):<br>
                                         <input type="url" name="announceImg" placeholder="https://..." style="width: 95%; background-color: #111; color: #00FF00;"><br><br>
                                         <input type="submit" value="BROADCAST NOW" style="background-color: #FF00FF; color: #000; font-weight: bold; cursor: pointer;">
+                                    </font>
+                                </form>
+                            </td>
+                        </tr>
+                    </table>
+                    <br><hr color="#FF00FF"><br>
+                </div>
+
+                <div id="adminMusicPanel" style="display: none;">
+                    <table border="3" bgcolor="#000000" width="100%" cellpadding="5" bordercolor="#FF0000">
+                        <tr>
+                            <td align="center" bgcolor="#800000">
+                                <font color="#FFFF00" face="Comic Sans MS" size="2"><b>*** GLOBAL MUSIC PLAYER ***</b></font>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <form name="musicForm" onsubmit="updateMusicPlayer(event)">
+                                    <font face="Courier New" size="2" color="#00FFFF">
+                                        YOUTUBE URL:<br>
+                                        <input type="text" name="musicUrl" placeholder="https://www.youtube.com/watch?v=..." style="width: 95%; background-color: #111; color: #00FF00;"><br><br>
+                                        TRACK TITLE (OPTIONAL):<br>
+                                        <input type="text" name="musicTitle" placeholder="Now playing..." style="width: 95%; background-color: #111; color: #00FF00;"><br><br>
+                                        <label><input type="checkbox" name="musicEnabled" checked> ENABLE FOR ALL MEMBERS</label><br><br>
+                                        <input type="submit" value="UPDATE GLOBAL PLAYER" style="background-color: #FF00FF; color: #000; font-weight: bold; cursor: pointer;">
                                     </font>
                                 </form>
                             </td>
@@ -473,6 +712,27 @@
             <i>Contact: clubakenno@aol.com</i>
         </font>
     </center>
+
+    <!-- Global music player widget: hidden until an admin enables it. Even
+         then, nothing loads or plays until the member clicks "TUNE IN". -->
+    <div id="musicPlayerWidget" style="display:none; position:fixed; bottom:15px; right:15px; z-index:9999; background:#000; border:3px solid #FF00FF; padding:8px; width:170px; font-family:'Courier New', monospace; box-shadow:0 0 15px #FF00FF;">
+        <div style="text-align:center; color:#FFFF00; font-size:11px; font-weight:bold; margin-bottom:4px;">♪ CLUB RADIO ♪</div>
+
+        <div id="musicTuneInPrompt" style="text-align:center;">
+            <div style="color:#00FFFF; font-size:10px; margin-bottom:6px;">CLUB RADIO IS LIVE</div>
+            <button id="musicTuneInBtn" onclick="tuneInToMusic()" style="background-color:#FF00FF; color:#000; font-weight:bold; cursor:pointer; font-size:11px; padding:5px 10px;">📻 TUNE IN</button>
+        </div>
+
+        <div id="musicNowPlaying" style="display:none;">
+            <div id="musicTitle" style="color:#00FFFF; font-size:10px; text-align:center; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">NOW PLAYING</div>
+            <div style="text-align:center;">
+                <button id="musicMuteBtn" onclick="toggleMusicMute()" style="background-color:#00FF00; color:#000; font-weight:bold; cursor:pointer; font-size:10px; padding:3px 8px;">🔊 MUTE</button>
+                <button onclick="leaveMusicPlayer()" style="background-color:#800000; color:#FFF; font-weight:bold; cursor:pointer; font-size:10px; padding:3px 8px; margin-left:4px;">LEAVE</button>
+            </div>
+        </div>
+
+        <div id="ytPlayerDiv" style="width:0; height:0; overflow:hidden;"></div>
+    </div>
 
 </body>
 </html>
