@@ -502,11 +502,21 @@
             if (radioTuned) {
                 btn.innerText = "TUNE OUT";
                 wrap.style.display = "block";
-                syncRadioPlayer();
+                
+                // If player already exists, force-load the current track & position immediately
+                if (ytPlayer && currentRadioState.nowPlaying) {
+                    const elapsed = currentRadioState.startedAt
+                        ? Math.max(0, (Date.now() - currentRadioState.startedAt) / 1000)
+                        : 0;
+                    ytPlayer.loadVideoById(currentRadioState.nowPlaying.videoId, elapsed);
+                    ytPlayer.playVideo();
+                } else {
+                    syncRadioPlayer();
+                }
             } else {
                 btn.innerText = "TUNE IN";
                 wrap.style.display = "none";
-                if (ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
+                if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
             }
         };
 
