@@ -3,6 +3,20 @@
 <head>
     <title>*** WELCOME TO CLUB AKENNO - OFFICIAL SITE ***</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
+
+    <!-- Standard Open Graph (Facebook, LinkedIn, Discord, WhatsApp) -->
+    <meta property="og:title" content="Club Akenno" />
+    <meta property="og:description" content="JOIN CLUB AKENNO NOW" />
+    <meta property="og:image" content="https://club-akenno.vercel.app/pic1.png" />
+    <meta property="og:url" content="https://club-akenno.vercel.app" />
+    <meta property="og:type" content="website" />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Club Akenno" />
+    <meta name="twitter:description" content="JOIN CLUB AKENNO NOW" />
+    <meta name="twitter:image" content="https://club-akenno.vercel.app/pic1.png" />
+
     <script type="module">
         import { auth, handleLogin, handleRegister, handleLogout } from "./auth.js";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
