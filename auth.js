@@ -131,4 +131,15 @@ export async function handleLogout() {
     }
 }
 
+/**
+ * Escapes a string for safe insertion into innerHTML. Use this any time
+ * user-controlled text (display name, email, etc.) is rendered as HTML,
+ * since a display name is set by the user and shouldn't be trusted as-is.
+ */
+export function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str ?? "";
+    return div.innerHTML;
+}
+
 export { app, auth, db };
