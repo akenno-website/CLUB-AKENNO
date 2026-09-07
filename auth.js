@@ -7,7 +7,8 @@ import {
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
     updateProfile,
-    onAuthStateChanged
+    onAuthStateChanged,
+    signOut
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import {
     getFirestore,
@@ -105,4 +106,17 @@ export async function handleRegister(event) {
     }
 }
 
-export { auth, db };
+/**
+ * Signs the current user out and redirects to the public homepage.
+ */
+export async function handleLogout() {
+    try {
+        await signOut(auth);
+        alert("YOU HAVE LOGGED OUT SUCCESSFULLY.");
+        window.location.href = "index.html";
+    } catch (err) {
+        alert("LOGOUT ERROR: " + err.message);
+    }
+}
+
+export { app, auth, db };

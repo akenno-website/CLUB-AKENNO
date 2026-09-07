@@ -4,23 +4,9 @@
     <title>*** CLUB AKENNO - MEMBERS AREA ***</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, doc, deleteDoc, setDoc, onSnapshot, query, orderBy, limit, serverTimestamp, increment, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyC5RIt66tqj_E7Xj_1UarhaIcGWezIVVVY",
-            authDomain: "club-akenno.firebaseapp.com",
-            projectId: "club-akenno",
-            storageBucket: "club-akenno.firebasestorage.app",
-            messagingSenderId: "515392757059",
-            appId: "1:515392757059:web:5185d8c5173aa0a4b6e3f6",
-            measurementId: "G-9RWL6RHRJN"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+        import { auth, db, handleLogout } from "./auth.js";
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { collection, addDoc, doc, deleteDoc, setDoc, onSnapshot, query, orderBy, limit, serverTimestamp, increment, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         function escapeHtml(str) {
             const div = document.createElement("div");
@@ -330,15 +316,7 @@
             });
         }
 
-        window.handleLogout = async function () {
-            try {
-                await signOut(auth);
-                alert("YOU HAVE LOGGED OUT SUCCESSFULLY.");
-                window.location.href = "index.html";
-            } catch (err) {
-                alert("LOGOUT ERROR: " + err.message);
-            }
-        };
+        window.handleLogout = handleLogout;
     </script>
 </head>
 <body bgcolor="#000000" text="#00FF00" link="#FF00FF" vlink="#00FFFF" background="https://www.transparenttextures.com/patterns/stardust.png">
