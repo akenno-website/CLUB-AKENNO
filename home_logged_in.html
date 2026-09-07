@@ -37,7 +37,7 @@
             if (user) {
                 const displayName = user.displayName || user.email;
                 document.getElementById("welcomeMsg").innerText = "WELCOME, MEMBER " + displayName.toUpperCase() + "!";
-                document.getElementById("userInfo").innerHTML = "Logged in as: " + escapeHtml(user.email) + "<br>Session: " + crypto.randomUUID() + `<a href="home_logged_in.html"><font color="#00FFFF"><b>[ ENTER MEMBERS AREA ]</b></font></a>`;
+                document.getElementById("userInfo").innerHTML = "Logged in as: " + escapeHtml(user.email) + "<br>Session: " + crypto.randomUUID() + `<br><br><a href="index.html"><font color="#00FFFF"><b>[ RETURN TO LANDING ]</b></font></a>`;
 
                 isUserAdminGlobal = ADMIN_EMAILS.some(
                     (email) => email.toLowerCase() === user.email.toLowerCase()
