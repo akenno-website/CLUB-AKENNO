@@ -403,31 +403,62 @@
 
         window.updateMusicPlayer = async function (event) {
             event.preventDefault();
-            if (!isUserAdminGlobal) return;
-
-            const url = document.forms["musicForm"]["musicUrl"].value.trim();
-            const title = document.forms["musicForm"]["musicTitle"].value.trim();
-            const enabled = document.forms["musicForm"]["musicEnabled"].checked;
             const currentUser = auth.currentUser;
             if (!currentUser) return;
 
+            const url = document.forms["musicForm"]["musicUrl"].value.trim();
+            const title = document.forms["musicForm"]["musicTitle"].value.trim();
+
             const videoId = extractYouTubeId(url);
-            if (enabled && !videoId) {
+            if (!videoId) {
                 alert("Enter a valid YouTube URL (watch, youtu.be, or shorts link).");
                 return;
             }
 
             try {
+                // Anyone can set the track. This never touches "enabled" —
+                // only the admin's power toggle does that — so suggesting a
+                // song doesn't switch the radio on for everyone by itself.
                 await setDoc(doc(db, "settings", "musicPlayer"), {
-                    enabled: enabled,
-                    videoId: videoId || "",
+                    videoId: videoId,
                     title: title || "",
                     startedAt: serverTimestamp(),
                     updatedBy: currentUser.email
-                });
-                alert(enabled ? "GLOBAL MUSIC PLAYER UPDATED FOR ALL MEMBERS!" : "GLOBAL MUSIC PLAYER TURNED OFF FOR ALL MEMBERS.");
+                }, { merge: true });
+
+                const isLive = latestMusicSettings && latestMusicSettings.enabled;
+                alert(isLive ? "TRACK SET! It's live now." : "TRACK SAVED! Waiting on the admin to turn the radio ON.");
+                document.forms["musicForm"].reset();
             } catch (err) {
-                alert("MUSIC UPDATE ERROR: " + err.message);
+                alert("TRACK UPDATE ERROR: " + err.message);
+            }
+        };
+
+        window.toggleGlobalMusicPower = async function () {
+            if (!isUserAdminGlobal) return;
+            const currentUser = auth.currentUser;
+            if (!currentUser) return;
+
+            const currentlyEnabled = !!(latestMusicSettings && latestMusicSettings.enabled);
+            const turningOn = !currentlyEnabled;
+
+            if (turningOn && (!latestMusicSettings || !latestMusicSettings.videoId)) {
+                alert("No track has been suggested yet — ask a member to add one first.");
+                return;
+            }
+
+            const payload = { enabled: turningOn, updatedBy: currentUser.email };
+            if (turningOn) {
+                // Restart the sync clock whenever the radio comes back on,
+                // so everyone drops in from the top instead of wherever the
+                // old timestamp would place them.
+                payload.startedAt = serverTimestamp();
+            }
+
+            try {
+                await setDoc(doc(db, "settings", "musicPlayer"), payload, { merge: true });
+            } catch (err) {
+                alert("POWER TOGGLE ERROR: " + err.message);
             }
         };
 
