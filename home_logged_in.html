@@ -3,6 +3,22 @@
 <head>
     <title>*** CLUB AKENNO - MEMBERS AREA ***</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <style>
+        .radio-player-container {
+            position: relative;
+            width: 100%;
+            height: 200px;
+        }
+        .radio-player-shield {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            background: transparent;
+        }
+    </style>
     <script type="module">
         import { auth, db, handleLogout } from "./auth.js";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -35,14 +51,12 @@
         let unsubRadio = null;
 
         // --- GLOBAL RADIO STATE ---
-        // Everything the radio needs lives in one Firestore doc: radio/global
-        // { power: bool, queue: [{videoId,url,title,addedBy,uid,addedAt}], nowPlaying: {...}|null, startedAt: epochMs|null }
         let currentRadioState = { power: false, queue: [], nowPlaying: null, startedAt: null };
         let radioTuned = false;
         let ytApiReady = false;
         let ytPlayer = null;
 
-        // Load the YouTube IFrame Player API once, up front, so it's ready by the time someone hits TUNE IN
+        // Load YouTube IFrame Player API
         window.onYouTubeIframeAPIReady = function () {
             ytApiReady = true;
             if (radioTuned) syncRadioPlayer();
@@ -297,10 +311,6 @@
                 const currentUser = auth.currentUser;
                 lbTable.innerHTML = "";
 
-                // Cosmetic-only pinned row. Doesn't touch Firestore, doesn't
-                // affect anyone else's real scores — just always renders
-                // akenno at #1 with an infinity symbol, regardless of
-                // actual click data in the database.
                 lbTable.innerHTML += `<tr bgcolor="#220033">
                     <td align="center"><font color="#FF00FF">1</font></td>
                     <td><font color="#00FFFF"><b>akenno</b></font></td>
@@ -315,8 +325,6 @@
                 let rank = 2;
                 snapshot.forEach((docSnap) => {
                     const data = docSnap.data();
-                    // Skip akenno's real doc in the normal list so they
-                    // don't appear twice.
                     if ((data.username || "").toLowerCase() === "akenno") return;
 
                     const isCurrentUser = currentUser && docSnap.id === currentUser.uid;
@@ -360,7 +368,6 @@
             }
         }
 
-        // Public YouTube oEmbed endpoint — no API key needed, just used to grab a display title.
         async function fetchYouTubeTitle(videoId) {
             try {
                 const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent("https://www.youtube.com/watch?v=" + videoId)}&format=json`);
@@ -407,7 +414,6 @@
                         addedAt: Date.now()
                     });
 
-                    // If the station is on air and nothing's currently playing, kick this straight into nowPlaying
                     let nowPlaying = data.nowPlaying || null;
                     let startedAt = data.startedAt || null;
                     if (data.power && !nowPlaying) {
@@ -445,7 +451,6 @@
                         startedAt = Date.now();
                     }
                     if (!newPower) {
-                        // Going off air stops playback for everyone but keeps the queue intact for next time
                         nowPlaying = null;
                         startedAt = null;
                     }
@@ -466,7 +471,6 @@
                     const data = snap.data();
                     if (!data.power) return;
 
-                    // Guard against a stale/duplicate "ended" firing after someone else already advanced
                     if (!force && expectedVideoId && (!data.nowPlaying || data.nowPlaying.videoId !== expectedVideoId)) {
                         return;
                     }
@@ -506,6 +510,12 @@
             }
         };
 
+        window.setRadioVolume = function(val) {
+            if (ytPlayer && ytPlayer.setVolume) {
+                ytPlayer.setVolume(val);
+            }
+        };
+
         function syncRadioPlayer() {
             if (!radioTuned || !ytApiReady) return;
             const np = currentRadioState.nowPlaying;
@@ -524,9 +534,21 @@
                     height: "200",
                     width: "100%",
                     videoId: np.videoId,
-                    playerVars: { autoplay: 1, start: Math.floor(elapsed) },
+                    playerVars: { 
+                        autoplay: 1, 
+                        start: Math.floor(elapsed),
+                        controls: 0,
+                        disablekb: 1,
+                        fs: 0,
+                        modestbranding: 1,
+                        rel: 0
+                    },
                     events: {
-                        onReady: (e) => e.target.playVideo(),
+                        onReady: (e) => {
+                            const volInput = document.getElementById("radioVolume");
+                            if (volInput) e.target.setVolume(volInput.value);
+                            e.target.playVideo();
+                        },
                         onStateChange: onRadioPlayerStateChange
                     }
                 });
@@ -539,6 +561,10 @@
         }
 
         function onRadioPlayerStateChange(event) {
+            if (event.data === YT.PlayerState.PAUSED && radioTuned && currentRadioState.power) {
+                ytPlayer.playVideo();
+            }
+
             if (event.data === YT.PlayerState.ENDED) {
                 const endedId = currentRadioState.nowPlaying ? currentRadioState.nowPlaying.videoId : null;
                 advanceRadioQueue(false, endedId);
@@ -589,7 +615,6 @@
             const queueCount = document.getElementById("radioQueueCount");
             if (queueCount) queueCount.innerText = `${currentRadioState.queue.length}/5`;
 
-            // If the station goes off air (or runs dry) while someone's tuned in, gracefully tune them out
             if ((!currentRadioState.power || !currentRadioState.nowPlaying) && radioTuned) {
                 radioTuned = false;
                 const btn = document.getElementById("tuneInBtn");
@@ -732,8 +757,15 @@
                                 <button id="tuneInBtn" onclick="toggleTuneIn()" style="background-color: #FF00FF; color: #000; font-weight: bold; cursor: pointer; padding: 6px 14px;" disabled>TUNE IN</button>
                             </font>
                             <div id="radioPlayerWrap" style="display:none; margin-top: 10px;">
-                                <div id="radioPlayer"></div>
-                                <font color="#555" size="1">Synced to the global stream — you're hearing what everyone else hears.</font>
+                                <div class="radio-player-container">
+                                    <div class="radio-player-shield"></div>
+                                    <div id="radioPlayer"></div>
+                                </div>
+                                <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
+                                    <font color="#00FFFF" size="1">VOLUME:</font>
+                                    <input type="range" id="radioVolume" min="0" max="100" value="100" oninput="setRadioVolume(this.value)" style="cursor: pointer;">
+                                </div>
+                                <font color="#555" size="1">Synced to the global stream — controls are locked to maintain sync.</font>
                             </div>
                         </td>
                         <td width="45%" valign="top" bgcolor="#050505">
