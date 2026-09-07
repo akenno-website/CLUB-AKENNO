@@ -6,7 +6,7 @@
     <script type="module">
         import { auth, db, handleLogout } from "./auth.js";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { collection, addDoc, doc, deleteDoc, setDoc, onSnapshot, query, orderBy, limit, serverTimestamp, increment, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { collection, addDoc, doc, deleteDoc, setDoc, onSnapshot, query, orderBy, limit, serverTimestamp, increment, arrayUnion, arrayRemove, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         function escapeHtml(str) {
             const div = document.createElement("div");
@@ -24,33 +24,6 @@
             }
         }
 
-        // --- Extracts a YouTube video ID from watch/short/embed/share links ---
-        function extractYouTubeId(url) {
-            if (!url) return "";
-            try {
-                const parsed = new URL(url.trim());
-                const host = parsed.hostname.replace(/^www\./, "");
-
-                if (host === "youtu.be") {
-                    return parsed.pathname.slice(1).split("/")[0] || "";
-                }
-                if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com") {
-                    if (parsed.pathname === "/watch") {
-                        return parsed.searchParams.get("v") || "";
-                    }
-                    if (parsed.pathname.startsWith("/embed/")) {
-                        return parsed.pathname.split("/embed/")[1].split("/")[0] || "";
-                    }
-                    if (parsed.pathname.startsWith("/shorts/")) {
-                        return parsed.pathname.split("/shorts/")[1].split("/")[0] || "";
-                    }
-                }
-                return "";
-            } catch {
-                return "";
-            }
-        }
-
         const REACTION_EMOJIS = ["❤️", "😆", "😢", "😡","🎄"];
 
         const ADMIN_EMAILS = ["akennmasangkay@gmail.com"];
@@ -59,55 +32,26 @@
         let unsubAnnouncements = null;
         let unsubShoutbox = null;
         let unsubLeaderboard = null;
-        let unsubMusicPlayer = null;
+        let unsubRadio = null;
 
-        // --- Global music player state ---
+        // --- GLOBAL RADIO STATE ---
+        // Everything the radio needs lives in one Firestore doc: radio/global
+        // { power: bool, queue: [{videoId,url,title,addedBy,uid,addedAt}], nowPlaying: {...}|null, startedAt: epochMs|null }
+        let currentRadioState = { power: false, queue: [], nowPlaying: null, startedAt: null };
+        let radioTuned = false;
+        let ytApiReady = false;
         let ytPlayer = null;
-        let ytPlayerReady = false;
-        let pendingVideoLoad = null;
-        let pendingShouldUnmute = false;
-        let latestMusicSettings = null;
-        let musicTunedIn = false; // per-visit choice — nobody is opted in until they click "TUNE IN"
 
-        // Load the YouTube IFrame API as soon as the page loads, regardless
-        // of auth state, so it's ready the moment we need it.
-        (function loadYouTubeAPI() {
+        // Load the YouTube IFrame Player API once, up front, so it's ready by the time someone hits TUNE IN
+        window.onYouTubeIframeAPIReady = function () {
+            ytApiReady = true;
+            if (radioTuned) syncRadioPlayer();
+        };
+        (function loadYouTubeApi() {
             const tag = document.createElement("script");
             tag.src = "https://www.youtube.com/iframe_api";
             document.head.appendChild(tag);
         })();
-
-        window.onYouTubeIframeAPIReady = function () {
-            ytPlayer = new YT.Player("ytPlayerDiv", {
-                height: "0",
-                width: "0",
-                videoId: "",
-                playerVars: {
-                    autoplay: 0,
-                    mute: 1,
-                    controls: 0,
-                    disablekb: 1,
-                    modestbranding: 1,
-                    playsinline: 1
-                },
-                events: {
-                    onReady: () => {
-                        ytPlayerReady = true;
-                        if (pendingVideoLoad) {
-                            ytPlayer.loadVideoById(pendingVideoLoad);
-                            if (pendingShouldUnmute) {
-                                ytPlayer.unMute();
-                                const btn = document.getElementById("musicMuteBtn");
-                                if (btn) btn.innerText = "🔊 MUTE";
-                            }
-                            ytPlayer.playVideo();
-                            pendingVideoLoad = null;
-                            pendingShouldUnmute = false;
-                        }
-                    }
-                }
-            });
-        };
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
@@ -120,22 +64,22 @@
                 );
 
                 document.getElementById("adminPanel").style.display = isUserAdminGlobal ? "block" : "none";
-                document.getElementById("adminMusicPanel").style.display = isUserAdminGlobal ? "block" : "none";
+                document.getElementById("radioAdminControls").style.display = isUserAdminGlobal ? "block" : "none";
 
                 if (unsubAnnouncements) unsubAnnouncements();
                 if (unsubShoutbox) unsubShoutbox();
                 if (unsubLeaderboard) unsubLeaderboard();
-                if (unsubMusicPlayer) unsubMusicPlayer();
+                if (unsubRadio) unsubRadio();
 
                 unsubAnnouncements = listenToAnnouncements();
                 unsubShoutbox = listenToShoutbox();
                 unsubLeaderboard = listenToLeaderboard();
-                unsubMusicPlayer = listenToMusicPlayer();
+                unsubRadio = listenToRadio();
             } else {
                 if (unsubAnnouncements) unsubAnnouncements();
                 if (unsubShoutbox) unsubShoutbox();
                 if (unsubLeaderboard) unsubLeaderboard();
-                if (unsubMusicPlayer) unsubMusicPlayer();
+                if (unsubRadio) unsubRadio();
                 alert("RESTRICTED AREA: You must be logged in to view this page.");
                 window.location.href = "index.html";
             }
@@ -396,168 +340,278 @@
             });
         }
 
-        // --- Global music player: admin sets a YouTube URL + on/off state,
-        // every logged-in member sees the same doc via onSnapshot and loads
-        // the same video, roughly seeked to the same position based on the
-        // server timestamp of when it was set. ---
+        // --- GLOBAL RADIO LOGIC ---
 
-        window.updateMusicPlayer = async function (event) {
+        function extractYouTubeId(rawUrl) {
+            try {
+                const u = new URL(rawUrl.trim());
+                const host = u.hostname.replace(/^www\./, "").replace(/^m\./, "");
+                if (host === "youtu.be") {
+                    return u.pathname.slice(1).split("/")[0] || null;
+                }
+                if (host === "youtube.com" || host === "music.youtube.com") {
+                    if (u.pathname === "/watch") return u.searchParams.get("v");
+                    if (u.pathname.startsWith("/embed/")) return u.pathname.split("/")[2] || null;
+                    if (u.pathname.startsWith("/shorts/")) return u.pathname.split("/")[2] || null;
+                }
+                return null;
+            } catch {
+                return null;
+            }
+        }
+
+        // Public YouTube oEmbed endpoint — no API key needed, just used to grab a display title.
+        async function fetchYouTubeTitle(videoId) {
+            try {
+                const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent("https://www.youtube.com/watch?v=" + videoId)}&format=json`);
+                if (!res.ok) return null;
+                const data = await res.json();
+                return data.title || null;
+            } catch {
+                return null;
+            }
+        }
+
+        window.addToRadioQueue = async function (event) {
             event.preventDefault();
             const currentUser = auth.currentUser;
             if (!currentUser) return;
 
-            const url = document.forms["musicForm"]["musicUrl"].value.trim();
-            const title = document.forms["musicForm"]["musicTitle"].value.trim();
+            const rawUrl = document.forms["radioQueueForm"]["radioUrl"].value.trim();
+            const videoId = extractYouTubeId(rawUrl);
 
-            const videoId = extractYouTubeId(url);
             if (!videoId) {
-                alert("Enter a valid YouTube URL (watch, youtu.be, or shorts link).");
+                alert("INVALID LINK: Please paste a valid YouTube video URL.");
                 return;
             }
 
-            try {
-                // Anyone can set the track. This never touches "enabled" —
-                // only the admin's power toggle does that — so suggesting a
-                // song doesn't switch the radio on for everyone by itself.
-                await setDoc(doc(db, "settings", "musicPlayer"), {
-                    videoId: videoId,
-                    title: title || "",
-                    startedAt: serverTimestamp(),
-                    updatedBy: currentUser.email
-                }, { merge: true });
+            const title = await fetchYouTubeTitle(videoId);
+            const radioRef = doc(db, "radio", "global");
 
-                const isLive = latestMusicSettings && latestMusicSettings.enabled;
-                alert(isLive ? "TRACK SET! It's live now." : "TRACK SAVED! Waiting on the admin to turn the radio ON.");
-                document.forms["musicForm"].reset();
+            try {
+                await runTransaction(db, async (tx) => {
+                    const snap = await tx.get(radioRef);
+                    const data = snap.exists() ? snap.data() : { power: false, queue: [], nowPlaying: null, startedAt: null };
+                    const queue = Array.isArray(data.queue) ? [...data.queue] : [];
+
+                    if (queue.length >= 5) {
+                        throw new Error("QUEUE_FULL");
+                    }
+
+                    queue.push({
+                        videoId,
+                        url: rawUrl,
+                        title: title || "Untitled Track",
+                        addedBy: currentUser.displayName || currentUser.email,
+                        uid: currentUser.uid,
+                        addedAt: Date.now()
+                    });
+
+                    // If the station is on air and nothing's currently playing, kick this straight into nowPlaying
+                    let nowPlaying = data.nowPlaying || null;
+                    let startedAt = data.startedAt || null;
+                    if (data.power && !nowPlaying) {
+                        nowPlaying = queue.shift();
+                        startedAt = Date.now();
+                    }
+
+                    tx.set(radioRef, { power: !!data.power, queue, nowPlaying, startedAt }, { merge: true });
+                });
+
+                document.forms["radioQueueForm"].reset();
             } catch (err) {
-                alert("TRACK UPDATE ERROR: " + err.message);
+                if (err.message === "QUEUE_FULL") {
+                    alert("QUEUE FULL: Max 5 tracks queued — wait for one to play out.");
+                } else {
+                    alert("QUEUE ERROR: " + err.message);
+                }
             }
         };
 
-        window.toggleGlobalMusicPower = async function () {
+        window.toggleRadioPower = async function () {
             if (!isUserAdminGlobal) return;
-            const currentUser = auth.currentUser;
-            if (!currentUser) return;
-
-            const currentlyEnabled = !!(latestMusicSettings && latestMusicSettings.enabled);
-            const turningOn = !currentlyEnabled;
-
-            if (turningOn && (!latestMusicSettings || !latestMusicSettings.videoId)) {
-                alert("No track has been suggested yet — ask a member to add one first.");
-                return;
-            }
-
-            const payload = { enabled: turningOn, updatedBy: currentUser.email };
-            if (turningOn) {
-                // Restart the sync clock whenever the radio comes back on,
-                // so everyone drops in from the top instead of wherever the
-                // old timestamp would place them.
-                payload.startedAt = serverTimestamp();
-            }
-
+            const radioRef = doc(db, "radio", "global");
             try {
-                await setDoc(doc(db, "settings", "musicPlayer"), payload, { merge: true });
+                await runTransaction(db, async (tx) => {
+                    const snap = await tx.get(radioRef);
+                    const data = snap.exists() ? snap.data() : { power: false, queue: [], nowPlaying: null, startedAt: null };
+                    const queue = Array.isArray(data.queue) ? [...data.queue] : [];
+                    const newPower = !data.power;
+                    let nowPlaying = data.nowPlaying || null;
+                    let startedAt = data.startedAt || null;
+
+                    if (newPower && !nowPlaying && queue.length > 0) {
+                        nowPlaying = queue.shift();
+                        startedAt = Date.now();
+                    }
+                    if (!newPower) {
+                        // Going off air stops playback for everyone but keeps the queue intact for next time
+                        nowPlaying = null;
+                        startedAt = null;
+                    }
+
+                    tx.set(radioRef, { power: newPower, queue, nowPlaying, startedAt }, { merge: true });
+                });
             } catch (err) {
-                alert("POWER TOGGLE ERROR: " + err.message);
+                alert("POWER SWITCH ERROR: " + err.message);
             }
         };
 
-        window.toggleMusicMute = function () {
-            if (!ytPlayer || !ytPlayerReady) return;
-            const btn = document.getElementById("musicMuteBtn");
-            if (ytPlayer.isMuted()) {
-                ytPlayer.unMute();
-                btn.innerText = "🔊 MUTE";
+        async function advanceRadioQueue(force, expectedVideoId) {
+            const radioRef = doc(db, "radio", "global");
+            try {
+                await runTransaction(db, async (tx) => {
+                    const snap = await tx.get(radioRef);
+                    if (!snap.exists()) return;
+                    const data = snap.data();
+                    if (!data.power) return;
+
+                    // Guard against a stale/duplicate "ended" firing after someone else already advanced
+                    if (!force && expectedVideoId && (!data.nowPlaying || data.nowPlaying.videoId !== expectedVideoId)) {
+                        return;
+                    }
+
+                    const queue = Array.isArray(data.queue) ? [...data.queue] : [];
+                    const next = queue.shift() || null;
+
+                    tx.set(radioRef, {
+                        nowPlaying: next,
+                        startedAt: next ? Date.now() : null,
+                        queue
+                    }, { merge: true });
+                });
+            } catch (err) {
+                console.error("Advance queue error:", err);
+            }
+        }
+
+        window.skipRadioTrack = async function () {
+            if (!isUserAdminGlobal) return;
+            await advanceRadioQueue(true);
+        };
+
+        window.toggleTuneIn = function () {
+            radioTuned = !radioTuned;
+            const btn = document.getElementById("tuneInBtn");
+            const wrap = document.getElementById("radioPlayerWrap");
+
+            if (radioTuned) {
+                btn.innerText = "TUNE OUT";
+                wrap.style.display = "block";
+                syncRadioPlayer();
             } else {
-                ytPlayer.mute();
-                btn.innerText = "🔇 UNMUTE";
+                btn.innerText = "TUNE IN";
+                wrap.style.display = "none";
+                if (ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
             }
         };
 
-        // User opts in — this is the only place playback actually starts
-        // and audio gets unmuted, since that has to happen on a real click
-        // (browsers block unmuted autoplay, and nobody should be opted into
-        // audio without asking).
-        window.tuneInToMusic = function () {
-            musicTunedIn = true;
-            document.getElementById("musicTuneInPrompt").style.display = "none";
-            document.getElementById("musicNowPlaying").style.display = "block";
-            loadCurrentTrack(true);
-        };
+        function syncRadioPlayer() {
+            if (!radioTuned || !ytApiReady) return;
+            const np = currentRadioState.nowPlaying;
 
-        window.leaveMusicPlayer = function () {
-            musicTunedIn = false;
-            document.getElementById("musicNowPlaying").style.display = "none";
-            document.getElementById("musicTuneInPrompt").style.display = "block";
-            if (ytPlayerReady && ytPlayer && ytPlayer.pauseVideo) {
-                ytPlayer.pauseVideo();
-            }
-        };
-
-        function loadCurrentTrack(shouldUnmute) {
-            const data = latestMusicSettings;
-            if (!data || !data.enabled || !data.videoId) return;
-
-            const elapsedSeconds = data.startedAt ? (Date.now() - data.startedAt.toMillis()) / 1000 : 0;
-            const loadParams = { videoId: data.videoId, startSeconds: Math.max(0, elapsedSeconds) };
-
-            if (!ytPlayerReady) {
-                pendingVideoLoad = loadParams;
-                pendingShouldUnmute = shouldUnmute;
+            if (!np || !currentRadioState.power) {
+                if (ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
                 return;
             }
 
-            const nowPlaying = ytPlayer.getVideoData ? ytPlayer.getVideoData().video_id : null;
-            if (nowPlaying !== data.videoId) {
-                ytPlayer.loadVideoById(loadParams);
+            const elapsed = currentRadioState.startedAt
+                ? Math.max(0, (Date.now() - currentRadioState.startedAt) / 1000)
+                : 0;
+
+            if (!ytPlayer) {
+                ytPlayer = new YT.Player("radioPlayer", {
+                    height: "200",
+                    width: "100%",
+                    videoId: np.videoId,
+                    playerVars: { autoplay: 1, start: Math.floor(elapsed) },
+                    events: {
+                        onReady: (e) => e.target.playVideo(),
+                        onStateChange: onRadioPlayerStateChange
+                    }
+                });
+            } else {
+                const loaded = ytPlayer.getVideoData ? ytPlayer.getVideoData().video_id : null;
+                if (loaded !== np.videoId) {
+                    ytPlayer.loadVideoById(np.videoId, elapsed);
+                }
             }
-            if (shouldUnmute) {
-                ytPlayer.unMute();
-                const btn = document.getElementById("musicMuteBtn");
-                if (btn) btn.innerText = "🔊 MUTE";
-            }
-            ytPlayer.playVideo();
         }
 
-        function applyMusicSettings(data) {
-            const widget = document.getElementById("musicPlayerWidget");
-            latestMusicSettings = data;
-
-            if (!data || !data.enabled || !data.videoId) {
-                widget.style.display = "none";
-                musicTunedIn = false;
-                document.getElementById("musicTuneInPrompt").style.display = "block";
-                document.getElementById("musicNowPlaying").style.display = "none";
-                if (ytPlayerReady && ytPlayer && ytPlayer.pauseVideo) {
-                    ytPlayer.pauseVideo();
-                }
-                return;
+        function onRadioPlayerStateChange(event) {
+            if (event.data === YT.PlayerState.ENDED) {
+                const endedId = currentRadioState.nowPlaying ? currentRadioState.nowPlaying.videoId : null;
+                advanceRadioQueue(false, endedId);
             }
-
-            widget.style.display = "block";
-            document.getElementById("musicTitle").innerText = data.title || "NOW PLAYING";
-
-            if (musicTunedIn) {
-                // Already opted in — follow the admin to whatever track
-                // changed to, but don't touch their current mute choice.
-                loadCurrentTrack(false);
-            }
-            // Otherwise just leave the "TUNE IN" prompt showing; nothing
-            // loads or plays until they click it.
         }
 
-        function listenToMusicPlayer() {
-            const ref = doc(db, "settings", "musicPlayer");
-            return onSnapshot(ref, (snap) => {
-                const data = snap.exists() ? snap.data() : null;
-                latestMusicSettings = data;
-                applyMusicSettings(data);
+        function renderRadioUI() {
+            const powerLabel = document.getElementById("radioPowerLabel");
+            if (powerLabel) {
+                powerLabel.innerHTML = currentRadioState.power
+                    ? `<font color="#00FF00">&#9673; ON AIR</font>`
+                    : `<font color="#FF0000">&#9675; OFF AIR</font>`;
+            }
 
-                // Pre-fill the admin form with the current state so it's
-                // obvious what's live right now.
-                if (isUserAdminGlobal && document.forms["musicForm"]) {
-                    document.forms["musicForm"]["musicEnabled"].checked = !!(data && data.enabled);
+            const powerBtn = document.getElementById("radioPowerBtn");
+            if (powerBtn) {
+                powerBtn.innerText = currentRadioState.power ? "POWER OFF" : "POWER ON";
+            }
+
+            const nowPlayingEl = document.getElementById("radioNowPlaying");
+            if (nowPlayingEl) {
+                if (currentRadioState.power && currentRadioState.nowPlaying) {
+                    const np = currentRadioState.nowPlaying;
+                    nowPlayingEl.innerHTML = `<font color="#FFFF00"><b>${escapeHtml(np.title || "Untitled Track")}</b></font><br><font color="#888" size="1">added by ${escapeHtml(np.addedBy || "Unknown")}</font>`;
+                } else {
+                    nowPlayingEl.innerHTML = `<font color="#888"><i>${currentRadioState.power ? "Queue is empty — add a track!" : "Radio is off air."}</i></font>`;
                 }
+            }
+
+            const tuneBtn = document.getElementById("tuneInBtn");
+            if (tuneBtn) {
+                const canListen = currentRadioState.power && !!currentRadioState.nowPlaying;
+                tuneBtn.disabled = !canListen;
+                tuneBtn.style.opacity = canListen ? "1" : "0.5";
+            }
+
+            const queueList = document.getElementById("radioQueueList");
+            if (queueList) {
+                if (currentRadioState.queue.length === 0) {
+                    queueList.innerHTML = "<li><i>Queue empty</i></li>";
+                } else {
+                    queueList.innerHTML = currentRadioState.queue.map((item) =>
+                        `<li><font color="#00FFFF">${escapeHtml(item.title || item.videoId)}</font> <font color="#888" size="1">(${escapeHtml(item.addedBy || "?")})</font></li>`
+                    ).join("");
+                }
+            }
+
+            const queueCount = document.getElementById("radioQueueCount");
+            if (queueCount) queueCount.innerText = `${currentRadioState.queue.length}/5`;
+
+            // If the station goes off air (or runs dry) while someone's tuned in, gracefully tune them out
+            if ((!currentRadioState.power || !currentRadioState.nowPlaying) && radioTuned) {
+                radioTuned = false;
+                const btn = document.getElementById("tuneInBtn");
+                if (btn) btn.innerText = "TUNE IN";
+                const wrap = document.getElementById("radioPlayerWrap");
+                if (wrap) wrap.style.display = "none";
+                if (ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
+            }
+        }
+
+        function listenToRadio() {
+            const radioRef = doc(db, "radio", "global");
+            return onSnapshot(radioRef, (snap) => {
+                const data = snap.exists() ? snap.data() : { power: false, queue: [], nowPlaying: null, startedAt: null };
+                currentRadioState = {
+                    power: !!data.power,
+                    queue: Array.isArray(data.queue) ? data.queue : [],
+                    nowPlaying: data.nowPlaying || null,
+                    startedAt: data.startedAt || null
+                };
+                renderRadioUI();
+                if (radioTuned) syncRadioPlayer();
             });
         }
 
@@ -624,31 +678,6 @@
                     <br><hr color="#FF00FF"><br>
                 </div>
 
-                <div id="adminMusicPanel" style="display: none;">
-                    <table border="3" bgcolor="#000000" width="100%" cellpadding="5" bordercolor="#FF0000">
-                        <tr>
-                            <td align="center" bgcolor="#800000">
-                                <font color="#FFFF00" face="Comic Sans MS" size="2"><b>*** GLOBAL MUSIC PLAYER ***</b></font>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>
-                                <form name="musicForm" onsubmit="updateMusicPlayer(event)">
-                                    <font face="Courier New" size="2" color="#00FFFF">
-                                        YOUTUBE URL:<br>
-                                        <input type="text" name="musicUrl" placeholder="https://www.youtube.com/watch?v=..." style="width: 95%; background-color: #111; color: #00FF00;"><br><br>
-                                        TRACK TITLE (OPTIONAL):<br>
-                                        <input type="text" name="musicTitle" placeholder="Now playing..." style="width: 95%; background-color: #111; color: #00FF00;"><br><br>
-                                        <label><input type="checkbox" name="musicEnabled" checked> ENABLE FOR ALL MEMBERS</label><br><br>
-                                        <input type="submit" value="UPDATE GLOBAL PLAYER" style="background-color: #FF00FF; color: #000; font-weight: bold; cursor: pointer;">
-                                    </font>
-                                </form>
-                            </td>
-                        </tr>
-                    </table>
-                    <br><hr color="#FF00FF"><br>
-                </div>
-
                 <table border="3" bgcolor="#000000" width="100%" cellpadding="5" bordercolor="#00FFFF">
                     <tr>
                         <td align="center" bgcolor="#008080">
@@ -685,6 +714,50 @@
             <td width="70%" valign="top">
                 <h2><font color="#00FFFF" face="Comic Sans MS" id="welcomeMsg">WELCOME, MEMBER!</font></h2>
                 <hr color="#00FF00">
+
+                <table border="3" bgcolor="#000000" width="100%" cellpadding="8" bordercolor="#00FFFF" style="margin-bottom: 20px;">
+                    <tr>
+                        <td align="center" bgcolor="#004080" colspan="2">
+                            <font color="#00FFFF" face="Comic Sans MS" size="3"><b>*** CLUB AKENNO GLOBAL RADIO ***</b></font>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td width="55%" valign="top" bgcolor="#050505">
+                            <font face="Courier New" size="2">
+                                <span id="radioPowerLabel"><font color="#FF0000">&#9675; OFF AIR</font></span>
+                                <br><br>
+                                <font color="#00FFFF">NOW PLAYING:</font><br>
+                                <span id="radioNowPlaying"><font color="#888"><i>Loading...</i></font></span>
+                                <br><br>
+                                <button id="tuneInBtn" onclick="toggleTuneIn()" style="background-color: #FF00FF; color: #000; font-weight: bold; cursor: pointer; padding: 6px 14px;" disabled>TUNE IN</button>
+                            </font>
+                            <div id="radioPlayerWrap" style="display:none; margin-top: 10px;">
+                                <div id="radioPlayer"></div>
+                                <font color="#555" size="1">Synced to the global stream — you're hearing what everyone else hears.</font>
+                            </div>
+                        </td>
+                        <td width="45%" valign="top" bgcolor="#050505">
+                            <font color="#00FFFF" face="Courier New" size="2"><b>UP NEXT (<span id="radioQueueCount">0/5</span>)</b></font>
+                            <ol id="radioQueueList" style="color:#00FF00; font-family: 'Courier New', monospace; font-size: 12px; padding-left: 20px;">
+                                <li><i>Queue empty</i></li>
+                            </ol>
+                            <form name="radioQueueForm" onsubmit="addToRadioQueue(event)">
+                                <font face="Courier New" size="2" color="#00FFFF">
+                                    ADD YOUTUBE LINK:<br>
+                                    <input type="url" name="radioUrl" placeholder="https://youtube.com/watch?v=..." required style="width: 95%; background-color: #111; color: #00FF00; border: 1px solid #00FF00; padding: 3px;"><br><br>
+                                    <input type="submit" value="ADD TO QUEUE" style="background-color: #00FF00; color: #000; font-weight: bold; cursor: pointer; width: 100%;">
+                                </font>
+                            </form>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" id="radioAdminControls" style="display:none;" bgcolor="#200000" align="center">
+                            <font color="#FFFF00" face="Courier New" size="2"><b>ADMIN RADIO CONTROLS:</b></font><br>
+                            <button id="radioPowerBtn" onclick="toggleRadioPower()" style="background-color: #FF0000; color: #FFF; font-weight: bold; cursor: pointer; padding: 6px 14px; margin: 6px;">POWER ON</button>
+                            <button onclick="skipRadioTrack()" style="background-color: #800080; color: #FFF; font-weight: bold; cursor: pointer; padding: 6px 14px; margin: 6px;">SKIP TRACK</button>
+                        </td>
+                    </tr>
+                </table>
 
                 <table border="3" bgcolor="#000000" width="100%" cellpadding="8" bordercolor="#FF00FF" style="margin-bottom: 20px;">
                     <tr>
@@ -743,27 +816,6 @@
             <i>Contact: clubakenno@aol.com</i>
         </font>
     </center>
-
-    <!-- Global music player widget: hidden until an admin enables it. Even
-         then, nothing loads or plays until the member clicks "TUNE IN". -->
-    <div id="musicPlayerWidget" style="display:none; position:fixed; bottom:15px; right:15px; z-index:9999; background:#000; border:3px solid #FF00FF; padding:8px; width:170px; font-family:'Courier New', monospace; box-shadow:0 0 15px #FF00FF;">
-        <div style="text-align:center; color:#FFFF00; font-size:11px; font-weight:bold; margin-bottom:4px;">♪ CLUB RADIO ♪</div>
-
-        <div id="musicTuneInPrompt" style="text-align:center;">
-            <div style="color:#00FFFF; font-size:10px; margin-bottom:6px;">CLUB RADIO IS LIVE</div>
-            <button id="musicTuneInBtn" onclick="tuneInToMusic()" style="background-color:#FF00FF; color:#000; font-weight:bold; cursor:pointer; font-size:11px; padding:5px 10px;">📻 TUNE IN</button>
-        </div>
-
-        <div id="musicNowPlaying" style="display:none;">
-            <div id="musicTitle" style="color:#00FFFF; font-size:10px; text-align:center; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">NOW PLAYING</div>
-            <div style="text-align:center;">
-                <button id="musicMuteBtn" onclick="toggleMusicMute()" style="background-color:#00FF00; color:#000; font-weight:bold; cursor:pointer; font-size:10px; padding:3px 8px;">🔊 MUTE</button>
-                <button onclick="leaveMusicPlayer()" style="background-color:#800000; color:#FFF; font-weight:bold; cursor:pointer; font-size:10px; padding:3px 8px; margin-left:4px;">LEAVE</button>
-            </div>
-        </div>
-
-        <div id="ytPlayerDiv" style="width:0; height:0; overflow:hidden;"></div>
-    </div>
 
 </body>
 </html>
