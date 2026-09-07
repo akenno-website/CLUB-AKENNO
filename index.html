@@ -177,6 +177,46 @@
 
                 <hr color="#00FF00">
 
+                <!-- Christmas Countdown Widget Start -->
+                 <center>
+<div id="christmas-countdown" style="
+  font-family: 'Brush Script MT', cursive;
+  text-align: center;
+  padding: 20px;
+  background: #ff0000;
+  color: #000000;
+  display: inline-block;
+  min-width: 150px;
+">
+  <div id="xmas-days" style="font-size: 48px; font-weight: bold; line-height: 1;">--</div>
+  <div style="font-size: 14px; text-transform: uppercase; margin-top: 5px; letter-spacing: 1px;">Days Until Christmas</div>
+</div>
+</center>
+
+<script>
+  (function() {
+    // Get current date (set time to midnight)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Target Christmas Day of current year
+    let currentYear = today.getFullYear();
+    let xmas = new Date(currentYear, 11, 25); // Month 11 is December
+
+    // If today is past Dec 25, target next year's Christmas
+    if (today > xmas) {
+      xmas = new Date(currentYear + 1, 11, 25);
+    }
+
+    // Calculate full calendar days remaining
+    const diffTime = xmas.getTime() - today.getTime();
+    const daysLeft = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+    // Update UI
+    document.getElementById('xmas-days').textContent = daysLeft;
+  })();
+</script>
+<!-- Christmas Countdown Widget End -->
                 <br>
                 <h2><font color="yellow">PICTURE</font></h2>
 
