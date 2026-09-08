@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Club Akenno — The Next-Gen Community Platform</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+
+    <!-- Open Graph & Meta -->
+    <meta property="og:title" content="Club Akenno" />
+    <meta property="og:description" content="Elevate your online presence with Club Akenno." />
+    <meta property="og:image" content="https://club-akenno.vercel.app/pic1.png" />
+    <meta property="og:url" content="https://club-akenno.vercel.app" />
+
+    <!-- Google Fonts & Tailwind CSS -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        brand: { 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' },
+                        dark: { 800: '#111827', 900: '#030712', 950: '#020617' }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <script type="module">
+        import { auth, handleLogin, handleRegister, handleLogout } from "./auth.js";
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        document.forms["loginForm"]?.addEventListener("submit", handleLogin);
+        document.forms["registerForm"]?.addEventListener("submit", handleRegister);
+        document.getElementById("logoutBtn")?.addEventListener("click", handleLogout);
+
+        onAuthStateChanged(auth, (user) => {
+            const authPanel = document.getElementById("authPanel");
+            const loggedInPanel = document.getElementById("loggedInPanel");
+
+            if (user) {
+                const displayName = user.displayName || user.email;
+                document.getElementById("loggedInUsername").textContent = displayName;
+                if (authPanel) authPanel.style.display = "none";
+                if (loggedInPanel) loggedInPanel.style.display = "block";
+            } else {
+                if (authPanel) authPanel.style.display = "block";
+                if (loggedInPanel) loggedInPanel.style.display = "none";
+            }
+        });
+    </script>
+</head>
+<body class="bg-dark-950 text-slate-100 font-sans antialiased selection:bg-brand-500 selection:text-white">
+
+    <audio id="bgMusic" loop src="bonjovi.mp3"></audio>
+
+    <!-- Top Announcement Banner -->
+    <div class="bg-gradient-to-r from-brand-600 to-indigo-800 text-white text-xs font-medium py-2 px-4 text-center">
+        <span>📢 Notice: Google Forms account migration is complete. Please register a new account below.</span>
+    </div>
+
+    <!-- Main SaaS Header -->
+    <header class="border-b border-slate-800/80 bg-dark-900/50 backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="h-8 w-8 rounded-lg bg-brand-600 flex items-center justify-center font-bold text-white shadow-lg shadow-brand-500/20">A</div>
+                <span class="font-bold text-lg tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">Club Akenno</span>
+                <span class="text-xs bg-brand-500/10 text-brand-400 border border-brand-500/20 px-2 py-0.5 rounded-full font-medium">v2.0 Enterprise</span>
+            </div>
+
+            <!-- Navigation Links -->
+            <nav class="hidden md:flex items-center space-x-8 text-sm font-medium text-slate-400">
+                <a href="about.html" class="hover:text-white transition-colors">About</a>
+                <a href="gallery.html" class="hover:text-white transition-colors">Gallery</a>
+                <a href="games.html" class="hover:text-white transition-colors">Games</a>
+            </nav>
+
+            <!-- Audio Player Widget -->
+            <div class="flex items-center space-x-3 bg-slate-900 border border-slate-800 rounded-full px-3 py-1.5 text-xs">
+                <span class="text-slate-400">Audio Stream</span>
+                <button onclick="document.getElementById('bgMusic').play()" class="text-brand-400 hover:text-brand-300 font-semibold">Play</button>
+                <span class="text-slate-600">|</span>
+                <button onclick="document.getElementById('bgMusic').pause()" class="text-slate-400 hover:text-slate-200">Pause</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero / Main Layout -->
+    <main class="max-w-7xl mx-auto px-6 py-12">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+            <!-- Sidebar Auth / Dashboard Panel -->
+            <div class="lg:col-span-4 space-y-6">
+                
+                <!-- Auth Panel -->
+                <div id="authPanel" style="display: none;" class="bg-dark-900 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+                    <div class="absolute -top-12 -right-12 w-32 h-32 bg-brand-500/10 rounded-full blur-2xl"></div>
+                    
+                    <h2 class="text-lg font-semibold text-white mb-1">Access Workspace</h2>
+                    <p class="text-xs text-slate-400 mb-6">Sign in or register your account to continue.</p>
+
+                    <!-- Login Form -->
+                    <form name="loginForm" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Username or Email</label>
+                            <input type="text" name="usernameOrEmail" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Password</label>
+                            <input type="password" name="password" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors">
+                        </div>
+                        <button type="submit" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-medium text-sm py-2 rounded-lg transition-colors shadow-lg shadow-brand-600/20">Sign In</button>
+                    </form>
+
+                    <div class="my-6 border-t border-slate-800"></div>
+
+                    <!-- Register Form -->
+                    <form name="registerForm" class="space-y-4">
+                        <div class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Create Account</div>
+                        <div>
+                            <input type="text" name="regUsername" placeholder="Username" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors">
+                        </div>
+                        <div>
+                            <input type="email" name="regEmail" placeholder="Email" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors">
+                        </div>
+                        <div>
+                            <input type="password" name="regPassword" placeholder="Password" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors">
+                        </div>
+                        <button type="submit" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-sm py-2 rounded-lg transition-colors border border-slate-700">Register</button>
+                    </form>
+                </div>
+
+                <!-- Logged In Panel -->
+                <div id="loggedInPanel" style="display: none;" class="bg-dark-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                    <div class="flex items-center space-x-3 mb-4">
+                        <div class="h-10 w-10 rounded-full bg-brand-500/20 text-brand-400 border border-brand-500/30 flex items-center justify-center font-bold">U</div>
+                        <div>
+                            <div class="text-xs text-slate-400">Logged in as</div>
+                            <div id="loggedInUsername" class="text-sm font-semibold text-white">Member</div>
+                        </div>
+                    </div>
+                    <a href="home_logged_in.html" class="block w-full text-center bg-brand-600 hover:bg-brand-500 text-white font-medium text-sm py-2.5 rounded-lg transition-colors shadow-lg shadow-brand-600/20 mb-3">Enter Members Portal &rarr;</a>
+                    <button id="logoutBtn" class="w-full bg-slate-950 hover:bg-rose-950/30 text-rose-400 hover:text-rose-300 border border-slate-800 hover:border-rose-900/50 text-xs font-medium py-2 rounded-lg transition-colors">Log Out</button>
+                </div>
+
+                <!-- Sidebar Media Cards -->
+                <div class="bg-dark-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Featured Visuals</div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <img src="pic1.png" alt="Visual 1" class="rounded-lg border border-slate-800 object-cover h-24 w-full">
+                        <img src="pic2.jpg" alt="Visual 2" class="rounded-lg border border-slate-800 object-cover h-24 w-full">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content SaaS Area -->
+            <div class="lg:col-span-8 space-y-8">
+                
+                <!-- Main Banner Card -->
+                <div class="bg-gradient-to-br from-dark-900 via-slate-900 to-dark-950 border border-slate-800 rounded-3xl p-8 relative overflow-hidden shadow-2xl">
+                    <div class="absolute top-0 right-0 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                    
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-brand-500/10 text-brand-400 border border-brand-500/20 mb-4">Official Community Hub</span>
+                    <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-4">Welcome to Club Akenno</h1>
+                    <p class="text-slate-400 text-sm leading-relaxed max-w-xl">
+                        Experience the ultimate digital ecosystem. Connect, engage, and elevate your community standing with zero friction.
+                    </p>
+                </div>
+
+                <!-- Live Christmas Countdown Widget -->
+                <div class="bg-dark-900 border border-slate-800 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div>
+                        <div class="text-xs font-semibold text-brand-400 uppercase tracking-wider">Event Tracker</div>
+                        <div class="text-lg font-semibold text-white">Christmas Countdown</div>
+                        <p class="text-xs text-slate-400">Automated global event synchronizer.</p>
+                    </div>
+                    <div class="flex items-baseline space-x-2 bg-slate-950 border border-slate-800 px-6 py-3 rounded-xl">
+                        <span id="xmas-days" class="text-3xl font-extrabold text-white">--</span>
+                        <span class="text-xs text-slate-400 font-medium">Days Remaining</span>
+                    </div>
+                </div>
+
+                <script>
+                  (function() {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    let currentYear = today.getFullYear();
+                    let xmas = new Date(currentYear, 11, 25);
+
+                    if (today > xmas) {
+                      xmas = new Date(currentYear + 1, 11, 25);
+                    }
+
+                    const diffTime = xmas.getTime() - today.getTime();
+                    const daysLeft = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+                    document.getElementById('xmas-days').textContent = daysLeft;
+                  })();
+                </script>
+
+                <!-- Featured Image Card -->
+                <div class="bg-dark-900 border border-slate-800 rounded-2xl p-4 overflow-hidden">
+                    <img src="pic4.PNG" alt="Featured Image" class="rounded-xl w-full object-cover max-h-96">
+                </div>
+
+                <!-- Feature Perks Grid -->
+                <div class="space-y-4">
+                    <h2 class="text-lg font-semibold text-white">Platform Benefits</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        
+                        <div class="bg-dark-900 border border-slate-800/80 rounded-xl p-4 flex items-start space-x-3">
+                            <div class="h-8 w-8 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center font-bold text-sm shrink-0">1</div>
+                            <div>
+                                <div class="text-sm font-medium text-white">Aura Amplification</div>
+                                <div class="text-xs text-slate-400 mt-0.5">Madadagdagdagan ng aura instantly upon registration.</div>
+                            </div>
+                        </div>
+
+                        <div class="bg-dark-900 border border-slate-800/80 rounded-xl p-4 flex items-start space-x-3">
+                            <div class="h-8 w-8 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center font-bold text-sm shrink-0">2</div>
+                            <div>
+                                <div class="text-sm font-medium text-white">Infinite Pogi Points Buff</div>
+                                <div class="text-xs text-slate-400 mt-0.5">Permanent status multiplier applied to member accounts.</div>
+                            </div>
+                        </div>
+
+                        <div class="bg-dark-900 border border-slate-800/80 rounded-xl p-4 flex items-start space-x-3">
+                            <div class="h-8 w-8 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center font-bold text-sm shrink-0">3</div>
+                            <div>
+                                <div class="text-sm font-medium text-white">Respectful Community</div>
+                                <div class="text-xs text-slate-400 mt-0.5">Curated space built on high trust and positive vibes.</div>
+                            </div>
+                        </div>
+
+                        <div class="bg-dark-900 border border-slate-800/80 rounded-xl p-4 flex items-start space-x-3">
+                            <div class="h-8 w-8 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20 flex items-center justify-center font-bold text-sm shrink-0">4</div>
+                            <div>
+                                <div class="text-sm font-medium text-white">Zero Corruption Policy</div>
+                                <div class="text-xs text-slate-400 mt-0.5">Transparent administration and fair governance guaranteed.</div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800/80 mt-16 py-8 text-xs text-slate-500">
+        <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div>&copy; 2026 Club Akenno Inc. All rights reserved.</div>
+            <div class="flex items-center space-x-6">
+                <span>Active Analytics Counter: <strong class="text-slate-300 font-mono">000001</strong></span>
+                <a href="mailto:clubakenno@aol.com" class="hover:text-slate-300 transition-colors">Support & Contact</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+      const bgAudio = document.getElementById('bgMusic');
+      function startAudio() {
+        bgAudio.play().then(() => {
+          document.removeEventListener('click', startAudio);
+          document.removeEventListener('keydown', startAudio);
+        }).catch(() => {});
+      }
+      startAudio();
+      document.addEventListener('click', startAudio);
+      document.addEventListener('keydown', startAudio);
+    </script>
+</body>
+</html>

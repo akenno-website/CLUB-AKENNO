@@ -350,6 +350,10 @@
 
         // --- GLOBAL RADIO LOGIC ---
 
+        // Played in place of any track that fails during playback (embedding disabled,
+        // region-blocked, etc.) so the queue never gets stuck on a dead video.
+        const FALLBACK_VIDEO_ID = "RUYypttogTI";
+
         function extractYouTubeId(rawUrl) {
             try {
                 const u = new URL(rawUrl.trim());
@@ -393,6 +397,10 @@
             }
 
             const title = await fetchYouTubeTitle(videoId);
+            if (!title) {
+                alert("UNPLAYABLE LINK: This video can't be embedded (private, deleted, or restricted). Please try a different link.");
+                return;
+            }
             const radioRef = doc(db, "radio", "global");
 
             try {
@@ -494,6 +502,37 @@
             await advanceRadioQueue(true);
         };
 
+        // Swaps a track that failed mid-playback for the fallback video, in place,
+        // so listeners don't just hit dead air / a stuck player.
+        async function replaceBrokenTrack(brokenVideoId) {
+            const radioRef = doc(db, "radio", "global");
+            try {
+                await runTransaction(db, async (tx) => {
+                    const snap = await tx.get(radioRef);
+                    if (!snap.exists()) return;
+                    const data = snap.data();
+                    if (!data.power) return;
+                    // Only swap if this client's view is still current — avoids double-swaps
+                    // if multiple tuned-in clients hit the error at once.
+                    if (!data.nowPlaying || data.nowPlaying.videoId !== brokenVideoId) return;
+
+                    tx.set(radioRef, {
+                        nowPlaying: {
+                            videoId: FALLBACK_VIDEO_ID,
+                            url: "https://www.youtube.com/watch?v=" + FALLBACK_VIDEO_ID,
+                            title: "Untitled Track",
+                            addedBy: "SYSTEM (fallback)",
+                            uid: null,
+                            addedAt: Date.now()
+                        },
+                        startedAt: Date.now()
+                    }, { merge: true });
+                });
+            } catch (err) {
+                console.error("Fallback swap error:", err);
+            }
+        }
+
         window.toggleTuneIn = function () {
             radioTuned = !radioTuned;
             const btn = document.getElementById("tuneInBtn");
@@ -559,7 +598,8 @@
                             if (volInput) e.target.setVolume(volInput.value);
                             e.target.playVideo();
                         },
-                        onStateChange: onRadioPlayerStateChange
+                        onStateChange: onRadioPlayerStateChange,
+                        onError: onRadioPlayerError
                     }
                 });
             } else {
@@ -578,6 +618,21 @@
             if (event.data === YT.PlayerState.ENDED) {
                 const endedId = currentRadioState.nowPlaying ? currentRadioState.nowPlaying.videoId : null;
                 advanceRadioQueue(false, endedId);
+            }
+        }
+
+        // Fires for unplayable videos (private, deleted, embedding disabled, region-locked, etc.)
+        // instead of onStateChange — this is what was jamming the queue before.
+        function onRadioPlayerError(event) {
+            console.error("Radio player error:", event.data, "videoId:", currentRadioState.nowPlaying && currentRadioState.nowPlaying.videoId);
+            const brokenId = currentRadioState.nowPlaying ? currentRadioState.nowPlaying.videoId : null;
+            if (!brokenId) return;
+
+            if (brokenId === FALLBACK_VIDEO_ID) {
+                // Fallback itself is broken somehow — skip instead of swapping to itself forever.
+                advanceRadioQueue(false, brokenId);
+            } else {
+                replaceBrokenTrack(brokenId);
             }
         }
 
